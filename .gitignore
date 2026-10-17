@@ -1,0 +1,51 @@
+# --- ROM / game data (docs/RULES.md 6.1: never commit) ---
+*.zip
+*.7z
+*.bin
+roms/
+cache.bin
+# Recompiled C sources generated from ROMs (may contain original bytes)
+src/recomp/generated/
+
+# --- Build output (eboot.bin is generated only under build/) ---
+build/
+build-*/
+*.vpk
+*.elf
+*.velf
+*.self
+*.o
+*.a
+*.obj
+*.exe
+
+# --- Debug output ---
+artifacts/
+*.psp2dmp
+
+# --- PSP build output ---
+EBOOT.PBP
+PARAM.SFO
+*.prx
+
+# --- Editor / OS ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- Local settings ---
+
+# ARK-5 sources kept locally for reference (GPLv3, not in the repo)
+ARK-5-main/
+
+# Settings/save states the app writes to the ROM folder (in the PSP dev loop, ROM folder = repo root)
+settings.cfg
+*.sav
+__pycache__/
+/*.cfg
+
+# editable art sources (tools/make_app_art.py)
+art_psd/
+*.psd

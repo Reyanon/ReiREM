@@ -1,0 +1,9 @@
+FBNeo upstream source origin (docs/RULES.md ch.6 item 2: keep original copyright headers)
+
+Repository: https://github.com/finalburnneo/FBNeo
+Revision: 658540d46c1c0efce9627667c0f9236e7b2be916 (2026-10-08)
+License: ../../LICENSE-FBNeo.txt
+
+Files under src/core/burn/ and src/core/cpu/ were copied as-is from src/burn/ and src/cpu/
+of the revision above (ADR-002 list A). Later changes are tracked in git history.
+src/core/shim/ is replacement code written for this project (ADR-002 list B).
