@@ -84,6 +84,7 @@ static INT32 use_mcu = 0;
 // (ReiREM: batched run — defined before DrvFrame below)
 enum { M72B_LATCH, M72B_PORT02, M72B_SAMPLE, M72B_RAM };
 static INT32 m72b_push(INT32 type, UINT16 addr, UINT8 data);
+extern "C" void rei_m72_z80_worker_enable(int on);
 static INT32 m72b_v35;
 static void m72b_raster_written(); // (ReiREM: V35 boards — the batched run reads the instruction position from the v25 core)
 static UINT8 m72b_ram_read(UINT32 address);
@@ -1824,6 +1825,7 @@ static void rei_tile_pens_exit(); // (before draw_layer below)
 static INT32 DrvExit()
 {
 	rei_m72_active = 0;
+	rei_m72_z80_worker_enable(0);
 	{ extern UINT32 rei_nec_pure_ports; rei_nec_pure_ports = 0; }
 	GenericTilesExit();
 #if !defined(REI_ORIGINAL_DRAW) && !defined(__ARM_NEON)
@@ -2630,9 +2632,11 @@ static void m72b_apply_one(INT32 k)
 		case M72B_RAM: DrvZ80RAM[m72b_addr[k]] = d; ZetIdleInvalidate(); break; // (memory seen by the Z80 changed externally)
 	}
 }
+// queued writes the Z80 side may look at: m72b_n, or with the Z80 worker thread the count published with the V30 progress (m72z_*)
+static INT32 m72b_nlim;
 static void m72b_apply_upto(INT32 slice) // writes of slices <= slice
 {
-	while (m72b_pos < m72b_n && m72b_ev_slice[m72b_pos] <= slice)
+	while (m72b_pos < m72b_nlim && m72b_ev_slice[m72b_pos] <= slice)
 		m72b_apply_one(m72b_pos++);
 }
 static void m72b_sync();
@@ -2748,7 +2752,7 @@ static void m72b_z80_run_to(INT32 end)
 		INT32 j = i;
 		const INT32 ev = nmi_mode && m72b_ev_on;
 		while (j < end - 1 && j < nInterleave - 1 && !(nmi_mode && !ev && j%nSampleInt == nSampleInt-1) &&
-		       !(m72b_pos < m72b_n && m72b_ev_slice[m72b_pos] <= j + 1))
+		       !(m72b_pos < m72b_nlim && m72b_ev_slice[m72b_pos] <= j + 1))
 			j++;
 		if (j > i) {
 			REI_PROF_CPU_BEGIN(tsl); // (profile: batched slice update — m6800 display slot, includes ZetRun time)
@@ -2787,12 +2791,76 @@ static void m72b_z80_run_to(INT32 end)
 	}
 	if (end > m72b_z80_done) m72b_z80_done = end;
 }
+// (ReiREM: Z80 worker thread, Vita/harness) The Z80 slices run on another core right behind the V30 in the same frame: main publishes
+// "slices below P may run, with the first N queued writes" (one 64-bit word, so the count always matches the progress) before each V30
+// run, the worker runs the Z80 up to P. Same slices, same writes in the same order as running them after the V30 phase, so identical results.
+// Main touches Z80-side state only while the worker waits (catch-up reads, queue full, frame start/end). YM2151 synthesis then happens on the
+// worker as the Z80 writes the chip (the frontend does not start the YM2151 worker).
+extern "C" volatile int rei_stop;
+extern "C" void (*rei_wait_hook)(void);
+static INT32 m72z_on; // worker in use (set by the frontend before the thread starts)
+static UINT64 m72z_pub; // (count << 32) | progress, written by main
+static INT32 m72z_done; // slices the Z80 finished, written by the worker
+static UINT32 m72z_seq, m72z_fin; // frame started by main / frame finished by the worker
+static INT32 m72z_sub_lines = 16; // (worker on) longest V30 run between publishes, in lines
+static INT32 m72z_cut; // the last V30 run was cut at m72z_sub_lines (not at an event)
+extern int rei_v25_auto_keep; // (v25.cpp)
+static inline void m72z_wait() { if (rei_wait_hook) rei_wait_hook(); }
+static void m72z_publish(INT32 progress)
+{
+	__atomic_store_n(&m72z_pub, ((UINT64)(UINT32)m72b_n << 32) | (UINT32)progress, __ATOMIC_RELEASE);
+}
+static void m72z_wait_done(INT32 s) // until the worker ran the Z80 up to slice s
+{
+	while (__atomic_load_n(&m72z_done, __ATOMIC_ACQUIRE) < s && !rei_stop)
+		m72z_wait();
+}
+extern "C" int rei_m72_z80_worker_supported(void) { return rei_m72_active && !use_mcu; }
+static UINT32 m72z_seq0; // frame count when enabled: the worker starts there even if it starts after main began a frame
+extern "C" void rei_m72_z80_worker_enable(int on)
+{
+	m72z_seq0 = m72z_seq;
+	m72z_on = on && rei_m72_z80_worker_supported();
+}
+extern "C" void rei_m72_z80_worker_run(void)
+{
+	UINT32 seq = m72z_seq0;
+	while (!rei_stop) {
+		const UINT32 cur = __atomic_load_n(&m72z_seq, __ATOMIC_ACQUIRE);
+		if (cur == seq) {
+			m72z_wait();
+			continue;
+		}
+		seq = cur;
+		while (!rei_stop) {
+			const UINT64 pub = __atomic_load_n(&m72z_pub, __ATOMIC_ACQUIRE);
+			const INT32 p = (INT32)(UINT32)pub;
+			if (p > m72b_z80_done) {
+				m72b_nlim = (INT32)(pub >> 32);
+				m72b_z80_run_to(p);
+				__atomic_store_n(&m72z_done, m72b_z80_done, __ATOMIC_RELEASE);
+			} else if (p >= m72b_inter) {
+				__atomic_store_n(&m72z_fin, seq, __ATOMIC_RELEASE);
+				break;
+			} else {
+				m72z_wait();
+			}
+		}
+	}
+}
 // Before V30 reads Z80 state: run the Z80 up to just before the current slice, plus the queued writes
 static void m72b_sync()
 {
 	if (!m72b_on) return;
 	const INT32 s = m72b_cur();
-	m72b_z80_run_to(s);
+	if (m72z_on) {
+		m72z_publish(s);
+		m72z_wait_done(s);
+	} else {
+		m72b_nlim = m72b_n;
+		m72b_z80_run_to(s);
+	}
+	m72b_nlim = m72b_n;
 	m72b_apply_upto(s);
 }
 // ---------------------------------------------------------------------------------------------------------------------
@@ -2879,6 +2947,12 @@ static INT32 DrvFrame()
 		m72b_n = m72b_pos = m72b_z80_done = 0;
 		m72b_on = 1;
 		ZetIdleKeepAcrossRuns(1); // (only m72b_apply_one changes Z80 RAM externally — invalidated there)
+		if (m72z_on) { // (Z80 worker: this frame's state is set, let it follow the V30)
+			m72z_cut = 0;
+			__atomic_store_n(&m72z_done, 0, __ATOMIC_RELAXED);
+			m72z_publish(0);
+			__atomic_store_n(&m72z_seq, m72z_seq + 1, __ATOMIC_RELEASE);
+		}
 		REI_PROF_BEGIN(ph1); // (profile build: V30 phase = v33 slot, Z80 phase = v35 slot)
 #ifndef REI_NO_V30_MERGE
 		m72b_cyc_total = nCyclesTotal[0];
@@ -2893,7 +2967,16 @@ static INT32 DrvFrame()
 				scanline_interrupts(ev);
 			}
 			if (s >= nInterleave) break;
-			const INT32 gend = m72b_next_event(ev) * multiplier; // from this slice on, past the next event
+			INT32 gend = m72b_next_event(ev) * multiplier; // from this slice on, past the next event
+			const INT32 keep_prev = rei_v25_auto_keep;
+			if (m72z_on) { // (Z80 worker: shorter runs so it can follow closely — runs without events in between give the same result)
+				// a run continuing a cut one keeps the V35 automatic idle loops (nothing happened in between; otherwise every cut
+				// restarted the detection: in-game kengo V35 2.2 -> 3.5ms)
+				if (m72z_cut && m72b_raster_line < 0) rei_v25_auto_keep = 1;
+				m72z_cut = gend > (ev + m72z_sub_lines) * multiplier;
+				if (m72z_cut) gend = (ev + m72z_sub_lines) * multiplier;
+				m72z_publish(s);
+			}
 			m72b_slice = s;
 			m72b_gend = gend;
 			m72b_done0 = nCyclesDone[0];
@@ -2901,6 +2984,7 @@ static INT32 DrvFrame()
 			m72b_raster_line = -1;
 			m72b_merged = 1;
 			nCyclesDone[0] += VezRun(gend * nCyclesTotal[0] / nInterleave - nCyclesDone[0]);
+			rei_v25_auto_keep = keep_prev;
 			m72b_merged = 0;
 			if (m72b_raster_line >= ev) ev = m72b_raster_line + 1; // (lines up to it are already checked with the old value)
 		}
@@ -2915,8 +2999,16 @@ static INT32 DrvFrame()
 		m72b_slice = nInterleave;
 		REI_PROF_END(ph1, REI_PROF_V33);
 		REI_PROF_BEGIN(ph2);
-		m72b_z80_run_to(nInterleave);
+		if (m72z_on) { // (profile: v35 slot = waiting for the worker)
+			m72z_publish(nInterleave);
+			while (__atomic_load_n(&m72z_fin, __ATOMIC_ACQUIRE) != m72z_seq && !rei_stop)
+				m72z_wait();
+		} else {
+			m72b_nlim = m72b_n;
+			m72b_z80_run_to(nInterleave);
+		}
 		REI_PROF_END(ph2, REI_PROF_V35);
+		m72b_nlim = m72b_n;
 		m72b_apply_upto(nInterleave); // (nothing should remain)
 		m72b_on = 0;
 		ZetIdleKeepAcrossRuns(0);

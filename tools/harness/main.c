@@ -258,6 +258,107 @@ static void *render_thread(void *arg)
 	return NULL;
 }
 
+// REI_PRERUN="set:frames[,set:frames...]": before the measured game, run other games in the same process and shut each
+// down the way the Vita frontend does between games (rei_core_exit). The measured hashes must equal a fresh process
+// (in-app game switching, docs/DECISIONS.md). Zips are looked up next to --rom; clones find their parent there too
+// REI_INIT_THREAD=1: rei_core_init runs on a thread of its own and the frames on the main thread, as on the Vita
+// (the loading screen draws while the loader thread reads the ROMs)
+typedef struct { const rei_core_config *cfg; int rc; } init_job;
+static void *init_thread(void *arg)
+{
+	init_job *j = (init_job *)arg;
+	j->rc = rei_core_init(j->cfg);
+	return NULL;
+}
+static int core_init(const rei_core_config *cfg)
+{
+	if (!getenv("REI_INIT_THREAD"))
+		return rei_core_init(cfg);
+	init_job j = { cfg, -1 };
+	pthread_t t;
+	pthread_create(&t, NULL, init_thread, &j);
+	pthread_join(t, NULL);
+	return j.rc;
+}
+
+typedef struct { int frames, alen; } prerun_snd;
+static void *prerun_sound(void *arg)
+{
+	prerun_snd *j = (prerun_snd *)arg;
+	int16_t *buf = (int16_t *)calloc((size_t)j->alen * 2 + 16, sizeof(int16_t));
+	for (int f = 0; f < j->frames; f++)
+		rei_core_sound_frame(buf);
+	free(buf);
+	return NULL;
+}
+static void *ym_worker_thread(void *arg);
+// REI_PRERUN_VITA=1: the earlier games run with the Vita frontend's threads (M92: pipelined, sound thread, render
+// frame by frame; M107: sound thread; other boards: deferred drawing, YM2151 worker thread) and stop them as it does
+static int prerun(const char *spec, const char *rom, int pipelined, int rate)
+{
+	const int vita = getenv("REI_PRERUN_VITA") != NULL;
+	char buf[512];
+	snprintf(buf, sizeof(buf), "%s", spec);
+	const char *sl = strrchr(rom, '/');
+	const int dl = sl ? (int)(sl - rom) + 1 : 0;
+	for (char *tok = strtok(buf, ","); tok; tok = strtok(NULL, ",")) {
+		char *colon = strchr(tok, ':');
+		const int frames = colon ? atoi(colon + 1) : 600;
+		if (colon)
+			*colon = 0;
+		static char zip[1024], par[1024];
+		snprintf(zip, sizeof(zip), "%.*s%s.zip", dl, rom, tok);
+		par[0] = 0;
+		for (int i = 0; i < rei_core_game_count(); i++)
+			if (!strcmp(rei_core_game_set(i), tok) && rei_core_game_parent(i))
+				snprintf(par, sizeof(par), "%.*s%s.zip", dl, rom, rei_core_game_parent(i));
+		rei_core_config c = { .zip_path = zip, .sample_rate = rate, .bytes_per_pixel = 4, .clock_us = now_us,
+			.pipelined = vita || pipelined, .threaded = vita, .render_threaded = vita, .set_name = tok,
+			.parent_zip_path = par[0] ? par : NULL };
+		if (core_init(&c) != 0) {
+			fprintf(stderr, "prerun %s: init failed: %s\n", tok, rei_core_error());
+			return 1;
+		}
+		int w = REI_SCREEN_W, h = REI_SCREEN_H, fl = 0;
+		if (!rei_core_is_m92())
+			rei_core_screen(&w, &h, &fl);
+		uint32_t *pfb = (uint32_t *)calloc((size_t)w * h, 4);
+		const int alen = rei_core_audio_len();
+		int16_t *pau = (int16_t *)calloc((size_t)alen * 2 + 16, sizeof(int16_t));
+		const int sthr = vita && rei_core_pipelined() && rei_core_sound_threaded();
+		const int rthr = vita && rei_core_render_threaded();
+		const int ythr = vita && !sthr && rei_core_ym_worker();
+		pthread_t st, yt;
+		prerun_snd sj = { frames, alen };
+		if (sthr)
+			pthread_create(&st, NULL, prerun_sound, &sj);
+		if (ythr) {
+			rei_core_ym_worker_enable(1);
+			pthread_create(&yt, NULL, ym_worker_thread, NULL);
+		}
+		for (int f = 0; f < frames; f++) {
+			rei_core_autoplay(f);
+			rei_core_run_frame(rthr ? NULL : pfb, w * 4, sthr ? NULL : pau);
+			if (rthr)
+				rei_core_render_frame(pfb, w * 4);
+		}
+		if (sthr)
+			pthread_join(st, NULL);
+		if (ythr) {
+			rei_core_ym_worker_enable(0);
+			rei_core_stop();
+			pthread_join(yt, NULL);
+		}
+		for (int i = 0; i < REI_IN_DIGITAL_COUNT; i++) // (the frontend releases every input between games)
+			rei_core_set_input(i, 0);
+		rei_core_exit();
+		free(pfb);
+		free(pau);
+		fprintf(stderr, "prerun %s: %d frames\n", tok, frames);
+	}
+	return 0;
+}
+
 static void usage(void)
 {
 	fprintf(stderr,
@@ -273,6 +374,7 @@ extern int rei_drc_enabled, rei_drc35_enabled;
 extern unsigned long long rei_drc_stats[13];
 #endif
 static void *ym_worker_thread(void *arg) { (void)arg; rei_core_ym_worker_run(); return NULL; }
+static void *z80_worker_thread(void *arg) { (void)arg; rei_core_z80_worker_run(); return NULL; }
 
 int main(int argc, char **argv)
 {
@@ -302,6 +404,7 @@ int main(int argc, char **argv)
 	int npokes = 0;
 	int ym_me = 0, ym_me_release = -1, ym_me_split_at[8], ym_me_split_mask[8], ym_me_nsplit = 0;
 	int ym_thread = 0; // --ym-thread: YM2151 synthesis for other boards on a worker thread (results must match)
+	int z80_thread = 0; // --z80-thread: M72-family Z80 on a worker thread right behind the V30 (results must match)
 	int rinline = 0, gem = 0, gm72 = 0;
 	int dump_frame = -1, no_idle = 0, mul = 0, pipelined = 0, threads = 0, rthread = 0, gesteps = 0, s2m_delay = 0, ym_main = 0;
 	const char *dump_path = NULL;
@@ -331,6 +434,7 @@ int main(int argc, char **argv)
 		}
 		else if (!strcmp(argv[i], "--threads")) threads = 1;
 		else if (!strcmp(argv[i], "--ym-thread")) ym_thread = 1;
+		else if (!strcmp(argv[i], "--z80-thread")) z80_thread = 1;
 		else if (!strcmp(argv[i], "--ym-me-release") && i + 1 < argc) ym_me_release = atoi(argv[++i]);
 		else if (!strcmp(argv[i], "--ym-me-split") && i + 2 < argc) { if (ym_me_nsplit < 8) { ym_me_split_at[ym_me_nsplit] = atoi(argv[i + 1]); ym_me_split_mask[ym_me_nsplit++] = (int)strtol(argv[i + 2], NULL, 16); } i += 2; } // F mask (hex), repeatable
 		else if (!strcmp(argv[i], "--ym-me")) ym_me = 1; // (PSP path) YM2151 synthesis via the ME-side code, run by main each frame instead. Sound 1 frame late
@@ -428,7 +532,9 @@ int main(int argc, char **argv)
 		cfg.wait_hook = ge_step_hook;
 		cfg.ge_sprites = 1;
 	}
-	if (rei_core_init(&cfg) != 0) {
+	if (getenv("REI_PRERUN") && prerun(getenv("REI_PRERUN"), rom, pipelined, rate) != 0)
+		return 1;
+	if (core_init(&cfg) != 0) {
 		fprintf(stderr, "init failed: %s\n", rei_core_error());
 		return 1;
 	}
@@ -482,7 +588,12 @@ int main(int argc, char **argv)
 		fprintf(stderr, "--render-thread: this game cannot use the render thread\n");
 		return 2;
 	}
-	pthread_t ymt;
+	pthread_t ymt, z8t;
+	if (z80_thread) {
+		if (!rei_core_z80_worker()) { fprintf(stderr, "--z80-thread: not supported for this game\n"); return 2; }
+		rei_core_z80_worker_enable(1);
+		pthread_create(&z8t, NULL, z80_worker_thread, NULL);
+	}
 	if (ym_thread) {
 		if (!rei_core_ym_worker()) { fprintf(stderr, "--ym-thread: not supported for this game\n"); return 2; }
 		rei_core_ym_worker_enable(1);
@@ -653,6 +764,11 @@ int main(int argc, char **argv)
 		rei_core_ym_worker_enable(0); // (after all remaining writes are applied)
 		rei_core_stop();
 		pthread_join(ymt, NULL);
+	}
+	if (z80_thread) {
+		rei_core_z80_worker_enable(0);
+		rei_core_stop();
+		pthread_join(z8t, NULL);
 	}
 	double dt = now_sec() - t0;
 #ifdef REI_RC_STATS

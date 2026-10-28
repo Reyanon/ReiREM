@@ -545,6 +545,10 @@ INT32 VezInit(INT32 cpu, INT32 type)
 	return VezInit(cpu, type, 0);
 }
 
+#if defined(REI_DRC) && (defined(__mips__) || defined(REI_DRC_TEST))
+extern "C" void rei_drc_exit(void);   // nec.cpp (V33/V30 dynarec)
+extern "C" void rei_drc35_exit(void); // v25.cpp (V35 dynarec)
+#endif
 void VezExit()
 {
 #if defined FBNEO_DEBUG
@@ -562,6 +566,17 @@ void VezExit()
 	nOpenedCPU = -1;
 	nVezCount = 0;
 	rei_ctx_nec = rei_ctx_v25 = 0; // (ReiREM)
+#if defined(REI_DRC) && (defined(__mips__) || defined(REI_DRC_TEST))
+	// (ReiREM) V33/V30 and V35 dynarec code caches back to nothing: the next game in the same process starts clean
+	rei_drc_exit();
+	rei_drc35_exit();
+#endif
+#if !defined(__PSP__) // (PSP: fixed slots per CPU, one game per process)
+	// (ReiREM) free the per-thread slots: this game's threads have stopped, and the next game in the same process
+	// (in-app game switching) runs on new threads (loader, sound) that each need a slot
+	for (INT32 i = 0; i < REI_VEZ_THREADS; i++)
+		__atomic_store_n(&rei_vez_threads[i].key, (uintptr_t)0, __ATOMIC_RELEASE);
+#endif
 
 	nOpenedCPU = -1;
 	

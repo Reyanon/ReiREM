@@ -29,6 +29,7 @@
 
 #include "ge_layers.h"
 #include "ge_m72.h"
+#include "menu.h"
 #include "settings.h"
 
 #define SCR_W 480
@@ -131,9 +132,66 @@ static int load_art_file(const char *dir, const char *name, uint16_t *out)
 	return 0;
 }
 
+// Games without their own artwork: the app's blank artwork (bundled, shapes only), tinted with the theme's accent (its
+// brightness times the colour, as on the Vita) and tinted again when the theme changes. Its brightness at screen size is
+// kept (130KB) for that
+#include "rei_blank_png.c" // vita/sce_sys_src/blankArtwork.png (psp/CMakeLists.txt)
+static uint8_t *g_blank_lum;
+static int g_art_blank;     // the border image is the blank artwork
+static uint32_t g_blank_acc; // accent it was tinted with
+static void blank_tint(void)
+{
+	const uint32_t acc = rei_menu_accent();
+	const unsigned tr = acc & 0xFF, tg = (acc >> 8) & 0xFF, tb = (acc >> 16) & 0xFF;
+	for (int i = 0; i < 2; i++) {
+		uint16_t *out = (uint16_t *)(0x44000000u + ART_OFF + i * ART_BYTES);
+		for (int y = 0; y < SCR_H; y++)
+			for (int x = 0; x < SCR_W; x++) {
+				const unsigned l = g_blank_lum[y * SCR_W + x];
+				unsigned r = l * tr / 128, g = l * tg / 128, b = l * tb / 128;
+				r = r > 255 ? 255 : r;
+				g = g > 255 ? 255 : g;
+				b = b > 255 ? 255 : b;
+				out[y * BUF_W + x] = (uint16_t)((r >> 3) | ((g >> 2) << 5) | ((b >> 3) << 11));
+			}
+		g_art_ok[i] = 1;
+	}
+	g_blank_acc = acc;
+}
+static void load_blank(void)
+{
+	if (!g_blank_lum) {
+		int w, h, c;
+		unsigned char *img = stbi_load_from_memory(rei_blank_png, size_rei_blank_png, &w, &h, &c, 3);
+		if (!img)
+			return;
+		g_blank_lum = (uint8_t *)malloc(SCR_W * SCR_H);
+		if (g_blank_lum) // (the average of each source block: its thin grid lines would drop out picking single pixels)
+			for (int y = 0; y < SCR_H; y++) {
+				const int y0 = y * h / SCR_H, y1 = (y + 1) * h / SCR_H > y0 ? (y + 1) * h / SCR_H : y0 + 1;
+				for (int x = 0; x < SCR_W; x++) {
+					const int x0 = x * w / SCR_W, x1 = (x + 1) * w / SCR_W > x0 ? (x + 1) * w / SCR_W : x0 + 1;
+					unsigned sum = 0, n = 0;
+					for (int yy = y0; yy < y1; yy++)
+						for (int xx = x0; xx < x1; xx++, n++) {
+							const unsigned char *px = img + ((size_t)yy * w + xx) * 3;
+							sum += (px[0] * 77u + px[1] * 150u + px[2] * 29u) >> 8;
+						}
+					g_blank_lum[y * SCR_W + x] = (uint8_t)(sum / n);
+				}
+			}
+		stbi_image_free(img);
+		if (!g_blank_lum)
+			return;
+	}
+	blank_tint();
+	g_art_blank = 1;
+}
+
 void video_load_art(const char *dir, const char *game, const char *parent)
 {
 	g_art_ok[0] = g_art_ok[1] = 0;
+	g_art_blank = 0;
 	uint16_t *buf = (uint16_t *)calloc(1, ART_BYTES);
 	if (!buf)
 		return;
@@ -145,6 +203,8 @@ void video_load_art(const char *dir, const char *game, const char *parent)
 		}
 	}
 	free(buf);
+	if (!g_art_ok[0])
+		load_blank();
 }
 
 void video_init(void)
@@ -892,6 +952,14 @@ void video_game_rect(int *x, int *y, int *w, int *h)
 	}
 }
 
+uint16_t *video_spare565(void) { return (uint16_t *)(0x44000000u + OFF_OFF); }
+const uint16_t *video_spare565_tex(void) { return (const uint16_t *)(0x04000000u + OFF_OFF); }
+void video_spare_clear(void)
+{
+	video_sync(); // (the GE may still read it)
+	memset((void *)(0x44000000u + OFF_OFF), 0, OFF_BYTES);
+}
+
 static uint32_t border_color(void)
 {
 	static const uint32_t c[REI_BCOL_COUNT] = { // 0xAABBGGRR
@@ -930,6 +998,8 @@ static void compose(void)
 	// border (fullscreen: the game covers everything)
 	if (g_settings.aspect != REI_ASPECT_FULL) {
 		const int art = g_settings.aspect == REI_ASPECT_1X ? 1 : 0;
+		if (g_settings.border == REI_BORDER_ARTWORK && g_art_blank && rei_menu_accent() != g_blank_acc)
+			blank_tint(); // (the theme changed in the menu)
 		if (g_settings.border == REI_BORDER_ARTWORK && g_art_ok[art]) {
 			sceGuTexMode(GU_PSM_5650, 0, 0, 0);
 			sceGuTexImage(0, 512, 512, BUF_W, (const void *)(0x04000000u + ART_OFF + art * ART_BYTES));

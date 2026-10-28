@@ -60,6 +60,10 @@ add_executable(${PROJECT_NAME}
   src/frontend/settings.c
   src/frontend/menu.c
   src/frontend/states.c
+  src/frontend/ui.c
+  src/frontend/touch.c
+  src/frontend/update.c
+  src/frontend/testpad.c
   src/platform/clock.c
   src/platform/log.c
   src/platform/perf.c
@@ -97,7 +101,36 @@ if(REI_LOG)
   endif()
 endif()
 
+# kernel helper module (PS button, update install), in the VPK as module/rei_kctrl.skprx (as ReSys12). Its user stubs are
+# made here directly (vita_create_stubs runs make on an unquoted path, and this tree's path has a space)
+add_executable(rei_kctrl kmod/rei_kctrl.c)
+set_target_properties(rei_kctrl PROPERTIES LINK_FLAGS "-nostdlib -fno-lto")
+target_compile_options(rei_kctrl PRIVATE -fno-builtin -fno-lto) # (LTO would drop module_stop: only the exports table names it)
+target_link_libraries(rei_kctrl SceCtrlForDriver_stub SceThreadmgrForDriver_stub SceIofilemgrForDriver_stub SceSysmemForDriver_stub)
+# (vita_create_self splits its flags on spaces, so the export config path cannot be passed through it)
+add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/rei_kctrl.skprx"
+  COMMAND vita-elf-create -e "${CMAKE_SOURCE_DIR}/kmod/exports.yml" $<TARGET_FILE:rei_kctrl> "${CMAKE_BINARY_DIR}/rei_kctrl.velf"
+  COMMAND vita-make-fself -c "${CMAKE_BINARY_DIR}/rei_kctrl.velf" "${CMAKE_BINARY_DIR}/rei_kctrl.skprx"
+  DEPENDS rei_kctrl "${CMAKE_SOURCE_DIR}/kmod/exports.yml"
+  VERBATIM)
+add_custom_target(kctrl_skprx ALL DEPENDS "${CMAKE_BINARY_DIR}/rei_kctrl.skprx")
+set(REI_KSTUB_DIR "${CMAKE_BINARY_DIR}/kctrl_stubs")
+set(REI_KSTUB "${REI_KSTUB_DIR}/librei_kctrl_v1_stub_weak.a")
+add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/kctrl.yml"
+  COMMAND vita-elf-export kernel $<TARGET_FILE:rei_kctrl> "${CMAKE_SOURCE_DIR}/kmod/exports.yml" "${CMAKE_BINARY_DIR}/kctrl.yml"
+  DEPENDS rei_kctrl "${CMAKE_SOURCE_DIR}/kmod/exports.yml"
+  VERBATIM)
+add_custom_command(OUTPUT "${REI_KSTUB}"
+  COMMAND vita-libs-gen "${CMAKE_BINARY_DIR}/kctrl.yml" "${REI_KSTUB_DIR}"
+  COMMAND make -C "${REI_KSTUB_DIR}"
+  DEPENDS "${CMAKE_BINARY_DIR}/kctrl.yml"
+  VERBATIM)
+add_custom_target(kctrl_stubs DEPENDS "${REI_KSTUB}")
+add_dependencies(${PROJECT_NAME} kctrl_stubs)
+target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/kmod)
+
 target_link_libraries(${PROJECT_NAME}
+  "${REI_KSTUB}"
   rei_core
   vita2d
   SceAudio_stub
@@ -113,6 +146,15 @@ target_link_libraries(${PROJECT_NAME}
   ScePower_stub
   SceNet_stub
   SceNetCtl_stub
+  SceShellSvc_stub
+  SceRtc_stub
+  SceTouch_stub
+  SceLibKernel_stub
+  taihen_stub
+  mbedtls
+  mbedx509
+  mbedcrypto
+  pthread
   png
   jpeg
   z
@@ -135,9 +177,14 @@ set(REI_SCE_SYS_FILES
   sce_sys/livearea/contents/startup.png
   sce_sys/livearea/contents/template.xml
 )
-# Bezel artwork is not packed in the VPK (copyright): users put it in ux0:data/reirem/artwork/<set>.png
-set(REI_VPK_ADD_ARGS "")
-set(REI_VPK_DEPS "")
+# Bezel artwork is not packed in the VPK (copyright): users put it in ux0:data/reirem/artwork/<set>.png.
+# module/rei_kctrl.skprx: the kernel helper; assets/blankArtwork.png: the border artwork of games without their own (shapes
+# and text only, tools/make_app_art.py); cacert.pem: certificates for the update check (HTTPS)
+set(REI_VPK_ADD_ARGS -a "${CMAKE_BINARY_DIR}/rei_kctrl.skprx=module/rei_kctrl.skprx"
+  -a "${CMAKE_SOURCE_DIR}/sce_sys_src/blankArtwork.png=assets/blankArtwork.png"
+  -a "${CMAKE_SOURCE_DIR}/res/cacert.pem=cacert.pem")
+set(REI_VPK_DEPS "${CMAKE_BINARY_DIR}/rei_kctrl.skprx" "${CMAKE_SOURCE_DIR}/sce_sys_src/blankArtwork.png"
+  "${CMAKE_SOURCE_DIR}/res/cacert.pem")
 foreach(f ${REI_SCE_SYS_FILES})
   list(APPEND REI_VPK_ADD_ARGS -a "${CMAKE_SOURCE_DIR}/${f}=${f}")
   list(APPEND REI_VPK_DEPS "${CMAKE_SOURCE_DIR}/${f}")

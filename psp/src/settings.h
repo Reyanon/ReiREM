@@ -52,6 +52,8 @@ enum { REI_TURBO_FAST, REI_TURBO_MEDIUM, REI_TURBO_SLOW, REI_TURBO_SPEED_COUNT }
 
 // Game list filter (SELECT cycles in this order)
 enum { REI_LIST_PLAYABLE, REI_LIST_ALL, REI_LIST_FAVORITES, REI_LIST_FILTER_COUNT };
+// Menu colour theme (global only; same themes as the Vita version, Graphite is the default)
+enum { REI_THEME_RED, REI_THEME_BLUE, REI_THEME_GREEN, REI_THEME_PURPLE, REI_THEME_ORANGE, REI_THEME_GRAPHITE, REI_THEME_COUNT };
 
 typedef struct {
 	int show_fps;
@@ -71,6 +73,7 @@ typedef struct {
 	char last_game[16];                 // set name of the last game played (game list cursor)
 	int list_filter;                    // game list filter: REI_LIST_*
 	int show_list;                      // show the list on next start even with one game (options screen Select game)
+	int theme;                          // REI_THEME_* (global only)
 } rei_settings;
 
 extern rei_settings g_settings;

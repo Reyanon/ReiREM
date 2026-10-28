@@ -473,6 +473,23 @@ static void (*s_progress)(int permille, void *user);
 static void *s_progress_user;
 static long long s_rom_total, s_rom_done;
 
+// bytes of the ROM being inflated (zipfile.c rei_zip_tick): the bar also moves inside a large ROM
+static int s_tick_last = -1;
+static void rom_tick(uint32_t done, uint32_t total)
+{
+	(void)total;
+	if (!s_progress || s_rom_total <= 0)
+		return;
+	long long d = s_rom_done + done;
+	if (d > s_rom_total)
+		d = s_rom_total;
+	const int p = (int)(d * 900 / s_rom_total);
+	if (p != s_tick_last) {
+		s_tick_last = p;
+		s_progress(p, s_progress_user);
+	}
+}
+
 // load.cpp: BurnLoadRom (nGap only, the range d_m92.cpp uses)
 
 INT32 BurnLoadRomExt(UINT8 *Dest, INT32 i, INT32 nGap, INT32 nFlags)
@@ -738,14 +755,22 @@ extern "C" int rei_core_init(const rei_core_config *cfg)
 		}
 		s_progress(0, s_progress_user);
 	}
+	s_tick_last = -1;
+	rei_zip_tick = s_progress ? rom_tick : NULL;
 	rei_cheats_reset(); // (driver init registers CPUs for cheats)
 	if (pDrv->Init() != 0) {
+		rei_zip_tick = NULL;
 		if (!s_error[0])
 			snprintf(s_error, sizeof(s_error), "Driver init failed");
 		rei_zip_close(s_zip);
 		s_zip = NULL;
 		if (s_parent_zip) rei_zip_close(s_parent_zip);
 		s_parent_zip = NULL;
+		// (ReiREM: another game may follow in this process) what the driver allocated before it failed is freed here;
+		// rei_core_exit must not be called after a failed init
+		rei_defer_unregister();
+		BurnStateExit();
+		BurnExitMemoryManager();
 		return 1;
 	}
 
@@ -753,6 +778,7 @@ extern "C" int rei_core_init(const rei_core_config *cfg)
 	if (strcmp(s_board, "M92") != 0 && cfg->render_threaded && rei_defer_registered() && rei_defer_enable() == 0)
 		rei_render_threaded = 1;
 
+	rei_zip_tick = NULL;
 	// all ROMs are read in init, so close the zip
 	rei_zip_close(s_zip);
 	s_zip = NULL;
@@ -1355,6 +1381,14 @@ extern "C" void BurnYM2151WorkerRun(void);
 extern "C" int rei_core_ym_worker(void) { return strcmp(s_board, "M92") != 0 && !rei_pipelined && BurnYM2151WorkerSupported(); }
 extern "C" void rei_core_ym_worker_enable(int on) { BurnYM2151WorkerEnable(on); }
 extern "C" void rei_core_ym_worker_run(void) { BurnYM2151WorkerRun(); }
+// M72-family boards without MCU: the Z80 (and the YM2151 it writes) on a worker thread right behind the V30 (d_m72.cpp m72z_*, identical
+// results). Used instead of the YM2151 worker; rei_core_z80_worker_run() on a CPU1 thread until rei_core_stop()
+extern "C" int rei_m72_z80_worker_supported(void);
+extern "C" void rei_m72_z80_worker_enable(int on);
+extern "C" void rei_m72_z80_worker_run(void);
+extern "C" int rei_core_z80_worker(void) { return !rei_pipelined && rei_m72_z80_worker_supported(); }
+extern "C" void rei_core_z80_worker_enable(int on) { rei_m72_z80_worker_enable(on); }
+extern "C" void rei_core_z80_worker_run(void) { rei_m72_z80_worker_run(); }
 #endif
 #ifdef REI_YM_ME
 // YM2151 synthesis on the ME (PSP other boards, burn_ym2151.cpp REI_YM_ME): sound comes out one frame late

@@ -42,8 +42,24 @@ endif()
 
 enable_language(ASM)
 # Outside-screen artwork is not bundled (copyright): users put artwork/<set>.png in the app folder
-add_executable(reirem src/main.c src/video.c src/ge_layers.c src/ge_m107.c src/ge_m72.c src/atomic64.c src/settings.c src/menu.c)
+# (src/font_ui.c: the menu font, Noto Sans pre-rendered by psp/tools/make_font.py — SIL OFL 1.1, psp/font/OFL.txt)
+add_executable(reirem src/main.c src/video.c src/ge_layers.c src/ge_m107.c src/ge_m72.c src/atomic64.c src/settings.c src/menu.c src/ui.c
+  src/font_ui.c)
 target_link_libraries(reirem PRIVATE rei_core z pspgu pspdebug pspdisplay pspge pspctrl psppower psprtc pspdmac m)
+# Loading screen background: the app's own art (vita/sce_sys/livearea/contents/bg.png, shapes and text only — tools/make_app_art.py),
+# bundled into the EBOOT (#included by menu.c)
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/rei_bg_png.c
+  COMMAND ${PSPDEV}/bin/bin2c ${REI_ROOT}/vita/sce_sys/livearea/contents/bg.png ${CMAKE_CURRENT_BINARY_DIR}/rei_bg_png.c rei_bg_png
+  DEPENDS ${REI_ROOT}/vita/sce_sys/livearea/contents/bg.png VERBATIM)
+set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/rei_bg_png.c PROPERTIES HEADER_FILE_ONLY TRUE)
+target_sources(reirem PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/rei_bg_png.c)
+# Border artwork of games without their own: the app's blank artwork (vita/sce_sys_src/blankArtwork.png, shapes only, same as
+# the Vita), bundled into the EBOOT (#included by video.c)
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/rei_blank_png.c
+  COMMAND ${PSPDEV}/bin/bin2c ${REI_ROOT}/vita/sce_sys_src/blankArtwork.png ${CMAKE_CURRENT_BINARY_DIR}/rei_blank_png.c rei_blank_png
+  DEPENDS ${REI_ROOT}/vita/sce_sys_src/blankArtwork.png VERBATIM)
+set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/rei_blank_png.c PROPERTIES HEADER_FILE_ONLY TRUE)
+target_sources(reirem PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/rei_blank_png.c)
 # Version (git commit hash, options screen About): rei_version.h regenerated every build (tools/git_version.cmake, shared with Vita)
 target_include_directories(reirem PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 add_custom_target(rei_version
@@ -211,9 +227,3 @@ add_custom_command(TARGET reirem POST_BUILD
 
 # Empty game for PSPLink development (psp/devstub)
 add_subdirectory(devstub)
-# Options screen Select game: bundle the kernel module that relaunches our EBOOT (devstub reilaunch) into the EBOOT (#included by main.c)
-add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/reilaunch_prx.c
-  COMMAND ${PSPDEV}/bin/bin2c $<TARGET_FILE:reilaunch>.prx ${CMAKE_CURRENT_BINARY_DIR}/reilaunch_prx.c reilaunch_prx
-  DEPENDS reilaunch VERBATIM)
-set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/reilaunch_prx.c PROPERTIES HEADER_FILE_ONLY TRUE)
-target_sources(reirem PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/reilaunch_prx.c)

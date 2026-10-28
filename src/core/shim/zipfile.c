@@ -15,6 +15,7 @@
 
 typedef struct {
 	char name[128];
+	char path[160]; // full name in the zip (folders included)
 	uint32_t crc;
 	uint32_t csize;
 	uint32_t usize;
@@ -105,6 +106,11 @@ rei_zip *rei_zip_open(const char *path)
 			if (nm[k] == '/' || nm[k] == '\\')
 				start = k + 1;
 		int n = nlen - start;
+		{
+			const int pn = nlen < (int)sizeof(e->path) ? nlen : (int)sizeof(e->path) - 1;
+			memcpy(e->path, nm, pn);
+			e->path[pn] = 0;
+		}
 		if (n > 0) {
 			if (n >= (int)sizeof(e->name))
 				n = sizeof(e->name) - 1;
@@ -155,7 +161,11 @@ int rei_zip_find(const rei_zip *z, const char *name, uint32_t crc)
 }
 
 uint32_t rei_zip_entry_size(const rei_zip *z, int idx) { return z->entries[idx].usize; }
+int rei_zip_count(const rei_zip *z) { return z->count; }
+const char *rei_zip_entry_path(const rei_zip *z, int idx) { return z->entries[idx].path; }
 uint32_t rei_zip_entry_crc(const rei_zip *z, int idx) { return z->entries[idx].crc; }
+
+void (*rei_zip_tick)(uint32_t done, uint32_t total);
 
 int rei_zip_read(rei_zip *z, int idx, uint8_t *dst, uint32_t cap, uint32_t *out_len)
 {
@@ -192,8 +202,21 @@ int rei_zip_read(rei_zip *z, int idx, uint8_t *dst, uint32_t cap, uint32_t *out_
 		s.next_in = src;
 		s.avail_in = e->csize;
 		s.next_out = full;
-		s.avail_out = e->usize;
-		int r = inflate(&s, Z_FINISH);
+		int r = Z_OK;
+		if (!rei_zip_tick) {
+			s.avail_out = e->usize;
+			r = inflate(&s, Z_FINISH);
+		} else { // (in steps, reporting the bytes so far: the loading screen's bar moves during a large ROM)
+			const uint32_t step = 256 * 1024;
+			while (r == Z_OK) {
+				const uint32_t left = e->usize - (uint32_t)s.total_out;
+				s.avail_out = left < step ? left : step;
+				r = inflate(&s, left <= step ? Z_FINISH : Z_NO_FLUSH);
+				rei_zip_tick((uint32_t)s.total_out, e->usize);
+				if (r == Z_BUF_ERROR && s.avail_out == 0 && s.total_out < e->usize)
+					r = Z_OK;
+			}
+		}
 		inflateEnd(&s);
 		if (r != Z_STREAM_END || s.total_out != e->usize)
 			goto out_full;

@@ -66,6 +66,11 @@ void video_set_game_gm72(const uint16_t *a, const uint16_t *clut, const uint32_t
 void video_layers_free(void);          // frees the video_layers_init atlases
 // game screen rectangle for the current aspect ratio
 void video_game_rect(int *x, int *y, int *w, int *h);
+// The game offscreen in VRAM as a spare 512x272 5650 picture while no game draws (loading screen background): CPU address
+// (uncached) and GE texture address. video_spare_clear blackens it again (before the game's first frames)
+uint16_t *video_spare565(void);
+const uint16_t *video_spare565_tex(void);
+void video_spare_clear(void);
 
 // Verify: read back the last drawn screen and compare with CPU colors from index/pal. Returns the number of differing pixels.
 // If first_diff is non-NULL, writes the first difference (x, y, expected, actual). Call after video_sync, before video_flip.

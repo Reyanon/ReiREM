@@ -100,6 +100,26 @@ static void zd_flush(void)
 	rei_z80_drc_stats[3]++;
 }
 
+static int zd_kb; // code cache size (KB) while zd_buf is held
+
+// (ReiREM, in-app game switching; Z80Exit) blocks are keyed by host pointers of the ended game's memory: free the code cache so the
+// next game starts with an empty one, as in a fresh process
+static void zd_exit(void)
+{
+	if (!zd_buf)
+		return;
+	for (int i = 0; i < ZD_HASH; i++)
+		zd_tab[i].fn = NULL, zd_tab[i].host = NULL;
+	zd_used = 0;
+#ifdef __psp__
+	free(zd_buf);
+#else
+	munmap(zd_buf, (size_t)zd_kb << 10);
+#endif
+	zd_buf = zd_ptr = zd_end = zd_code0 = NULL;
+	zd_kb = 0;
+}
+
 static int zd_init(void)
 {
 	if (zd_buf)
@@ -120,6 +140,7 @@ static int zd_init(void)
 		return 0;
 	}
 	zd_end = zd_buf + (kb << 10) / 4;
+	zd_kb = kb;
 	zd_gen_helpers();
 	zd_flush();
 	rei_z80_drc_stats[3] = 0;

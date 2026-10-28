@@ -10,7 +10,8 @@
 #define REI_AUDIO_RATE 48000
 
 int rei_audio_init(void);
-void rei_audio_fini(void);
+void rei_audio_fini(void);     // game end (the output port stays open)
+void rei_audio_shutdown(void); // app exit: thread and port released
 
 // Interleaved stereo INT16, frames = sample pairs. Excess is dropped when full
 void rei_audio_push(const int16_t *samples, int frames);

@@ -280,14 +280,14 @@ static int drc_next_seg(void) // switch to the second region (if present and sti
 }
 // (ReiREM) The first time the code cache fills, enlarge the second region once (not reserved up front for all games; most never overflow).
 // A full flush follows, so code in the old region is unused. PSP tries REI_DRC_GROW_KB (default 4096) then halves; harness uses REI_DRC_GROW_KB
+static int drc_grow_done; // (reset by drc_exit)
 static int drc_grow_seg1(void)
 {
-	static int done;
-	if (done) return 0;
+	if (drc_grow_done) return 0;
 #ifdef REI_DRC_V25
 	if (rei_drc35_on_me) return 0; // (ME cannot allocate: just flush)
 #endif
-	done = 1;
+	drc_grow_done = 1;
 	int kb = 0;
 #if defined(__psp__)
 #ifdef REI_DRC_GROW_KB
@@ -711,6 +711,46 @@ static int drc_idle_compile(unsigned budget_us)
 		memset(drc_q_seen, 0, sizeof(drc_q_seen));
 	rei_drc_idle_n += n;
 	return n;
+}
+
+// (ReiREM, in-app game switching) Give back what this instance took for the game that just ended, so the next game's drc_init
+// starts from nothing as in a fresh process: blocks are keyed by host pointers of that game's ROM pages (a new game may get the same
+// addresses), the grown second region and the larger table came from the heap, and the dispatcher keeps volatile-page marks and a
+// compile queue holding chip pointers. Called from the CPU exit after the game's threads have stopped
+static void drc_exit(void)
+{
+	drc_qn = 0;
+	memset(drc_q_seen, 0, sizeof(drc_q_seen));
+	memset(drc_page_vol, 0, sizeof(drc_page_vol));
+	drc_map_dirty = 1;
+	drc_grow_done = 0;
+	if (!drc_buf)
+		return;
+#if defined(__psp__)
+	if (drc_nsegs >= 2)
+		free(drc_segs[1].code_start);
+#if defined(REI_DRC_FASTDATA)
+	if (rei_drc_fastdata_owner == DRC_INSTANCE_ID)
+		rei_drc_fastdata_owner = 0; // (fixed region: nothing to free)
+	else
+		free(drc_buf);
+#else
+	free(drc_buf);
+#endif
+#else
+	if (drc_nsegs >= 2)
+		munmap(drc_segs[1].code_start, (size_t)((char *)(drc_segs[1].xt_info + drc_segs[1].xt_cap) - (char *)drc_segs[1].code_start));
+	munmap(drc_buf, (size_t)drc_cache_bytes);
+#endif
+	if (drc_tab != drc_tab0) {
+		free(drc_tab);
+		drc_tab = drc_tab0;
+		drc_hmask = DRC_HASH - 1;
+	}
+	memset(drc_segs, 0, sizeof(drc_segs));
+	drc_nsegs = drc_cur = 0;
+	drc_buf = drc_ptr = drc_end = drc_code0 = NULL;
+	drc_tab_used = 0;
 }
 
 // Is the block still intact in the current map (bank switching)

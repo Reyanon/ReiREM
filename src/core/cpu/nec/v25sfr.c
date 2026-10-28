@@ -418,3 +418,41 @@ void v25_write_word(v25_state_t *nec_state, unsigned a, UINT16 d)
 	cpu_writemem20(a, d);
 	cpu_writemem20(a+1, d>>8);
 }
+
+// ReiREM port: aligned word access to mapped memory in one page lookup (same results as v25_read_word / v25_write_word:
+// not the internal RAM/SFR page, not 0xffffe, both bytes in the same 512-byte page, write log entries in the same order).
+// PUSH/POP and word operands go through here; the generic functions took two lookups and a call (Kengo title, Vita)
+static inline __attribute__((always_inline)) UINT16 v25_rdw_fast(v25_state_t *nec_state, unsigned a)
+{
+	if (!(a & 1) && (a & 0xFFE00) != nec_state->IDB && a != 0xFFFFE && !v25_rec) {
+		const UINT32 m = a & 0xFFFFF;
+		const UINT8 *p = rei_v25_pg_rd[m >> 9];
+		if (p)
+			return p[m] | (p[m + 1] << 8);
+	}
+	return v25_read_word(nec_state, a);
+}
+
+static inline __attribute__((always_inline)) void v25_wrw_fast(v25_state_t *nec_state, unsigned a, UINT16 d)
+{
+	if (!(a & 1) && (a & 0xFFE00) != nec_state->IDB && a != 0xFFFFE && !v25_rec) {
+		const UINT32 m = a & 0xFFFFF;
+		UINT8 *p = rei_v25_pg_wr[m >> 9];
+		if (p) {
+			p[m] = (UINT8)d;
+			p[m + 1] = (UINT8)(d >> 8);
+			v25_wl_a[v25_wl_pos & (V25_WL - 1)] = m;
+			v25_wl_v[v25_wl_pos & (V25_WL - 1)] = (UINT8)d;
+			v25_wl_a[(v25_wl_pos + 1) & (V25_WL - 1)] = m + 1;
+			v25_wl_v[(v25_wl_pos + 1) & (V25_WL - 1)] = (UINT8)(d >> 8);
+			v25_wl_pos += 2;
+			return;
+		}
+	}
+	v25_write_word(nec_state, a, d);
+}
+
+#undef read_mem_word
+#undef write_mem_word
+#define read_mem_word(a)			v25_rdw_fast(nec_state,(a))
+#define write_mem_word(a,d)			v25_wrw_fast(nec_state,(a),(d))

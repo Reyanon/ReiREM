@@ -3,6 +3,9 @@
 #include <psp2/ctrl.h>
 
 #include "frontend/settings.h"
+#include "frontend/testpad.h"
+#include "frontend/touch.h"
+#include "frontend/video.h"
 #include "rei_core.h"
 
 #define STICK_DEAD 48 // distance from center (128) required to count as a direction
@@ -16,13 +19,35 @@ uint32_t rei_input_poll(void)
 {
 	SceCtrlData pad;
 	sceCtrlPeekBufferPositive(0, &pad, 1);
-	uint32_t b = pad.buttons;
+	const uint32_t raw = pad.buttons | rei_testpad_step(); // (log builds: the test input script)
+	uint32_t b = raw;
+	if (g_settings.touch_keys) // touch buttons press their Vita keys (in the game only: the value returned is the pad alone)
+		b |= rei_touch_buttons();
 
-	int up = (b & SCE_CTRL_UP) || pad.ly < 128 - STICK_DEAD;
-	int down = (b & SCE_CTRL_DOWN) || pad.ly > 128 + STICK_DEAD;
-	int left = (b & SCE_CTRL_LEFT) || pad.lx < 128 - STICK_DEAD;
-	int right = (b & SCE_CTRL_RIGHT) || pad.lx > 128 + STICK_DEAD;
-
+	int up = (b & SCE_CTRL_UP) != 0, down = (b & SCE_CTRL_DOWN) != 0;
+	int left = (b & SCE_CTRL_LEFT) != 0, right = (b & SCE_CTRL_RIGHT) != 0;
+	if (g_settings.stick == REI_STICK_LEFT || g_settings.stick == REI_STICK_BOTH) {
+		up |= pad.ly < 128 - STICK_DEAD;
+		down |= pad.ly > 128 + STICK_DEAD;
+		left |= pad.lx < 128 - STICK_DEAD;
+		right |= pad.lx > 128 + STICK_DEAD;
+	}
+	if (g_settings.stick == REI_STICK_RIGHT || g_settings.stick == REI_STICK_BOTH) {
+		up |= pad.ry < 128 - STICK_DEAD;
+		down |= pad.ry > 128 + STICK_DEAD;
+		left |= pad.rx < 128 - STICK_DEAD;
+		right |= pad.rx > 128 + STICK_DEAD;
+	}
+	if (rei_input_rot) {
+		// the Vita is held turned (Rotate Vertical L / R): screen directions back to the game's
+		// (90: screen right = game up; 270: screen left = game up)
+		const int u = up, d = down, l = left, r = right;
+		if (rei_input_rot == 90) {
+			up = r; down = l; left = u; right = d;
+		} else {
+			up = l; down = r; left = d; right = u;
+		}
+	}
 	rei_core_set_input(REI_IN_P1_UP, up);
 	rei_core_set_input(REI_IN_P1_DOWN, down);
 	rei_core_set_input(REI_IN_P1_LEFT, left);
@@ -30,13 +55,24 @@ uint32_t rei_input_poll(void)
 
 	// system combos are not passed to the game: SELECT+START options, SELECT+L quick save, SELECT+R quick load
 	uint32_t blocked = 0;
-	if ((b & SCE_CTRL_SELECT) && (b & SCE_CTRL_START))
+	if ((raw & SCE_CTRL_SELECT) && (raw & SCE_CTRL_START))
 		blocked |= SCE_CTRL_SELECT | SCE_CTRL_START;
-	if ((b & SCE_CTRL_SELECT) && (b & SCE_CTRL_LTRIGGER))
+	if ((raw & SCE_CTRL_SELECT) && (raw & SCE_CTRL_LTRIGGER))
 		blocked |= SCE_CTRL_SELECT | SCE_CTRL_LTRIGGER;
-	if ((b & SCE_CTRL_SELECT) && (b & SCE_CTRL_RTRIGGER))
+	if ((raw & SCE_CTRL_SELECT) && (raw & SCE_CTRL_RTRIGGER))
 		blocked |= SCE_CTRL_SELECT | SCE_CTRL_RTRIGGER;
-	const uint32_t game = b & ~blocked;
+	uint32_t game = b & ~blocked;
+
+	// combo keys: a key with a combo acts as its two keys pressed together (instead of its own mapping)
+	uint32_t add = 0;
+	for (int k = 0; k < REI_COMBO_KEYS; k++)
+		if (g_settings.combo[k] && (game & rei_key_mask(k))) {
+			game &= ~rei_key_mask(k);
+			for (int j = 0; j < REI_COMBO_KEYS; j++)
+				if (g_settings.combo[k] & (1 << j))
+					add |= rei_key_mask(j);
+		}
+	game |= add;
 
 	// turbo: while the turbo key is held, the chosen game button is pressed only during the first half of each period.
 	// counting starts at the press frame, so the first press registers immediately
@@ -60,5 +96,11 @@ uint32_t rei_input_poll(void)
 			on |= turbo_on;
 		rei_core_set_input(act_input[a], on);
 	}
-	return b;
+	return raw;
+}
+
+void rei_input_release(void)
+{
+	for (int i = 0; i < REI_IN_DIGITAL_COUNT; i++)
+		rei_core_set_input(i, 0);
 }

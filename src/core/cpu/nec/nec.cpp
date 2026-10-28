@@ -4359,6 +4359,8 @@ static REI_LINE_FAST_FN(10) void rei_hook(nec_state_t *nec_state, UINT32 pc, int
 #ifdef REI_DRC_ACTIVE
 // (frontend) compile deferred blocks in spare time before waiting for vblank (nec_drc.inc drc_idle_compile). Returns count
 extern "C" int rei_drc_idle_compile(unsigned budget_us) { return drc_idle_compile(budget_us); }
+// (nec_intf VezExit, in-app game switching) code cache and block table back to nothing for the next game
+extern "C" void rei_drc_exit(void) { drc_exit(); }
 #endif
 
 REI_LINE_FN(16) int nec_execute(int cycles) // (dispatcher included in the line section so placement is not shifted by other code size)

@@ -22,6 +22,7 @@ rei_settings g_settings = {
 	.turbo_speed = REI_TURBO_FAST,
 	.cheat_health = 0,
 	.dip_count = 0,
+	.theme = REI_THEME_GRAPHITE, // (default theme, owner 2026-10-28)
 };
 
 static char s_dir[96] = "ms0:/PSP/GAME/REIREM/";
@@ -276,6 +277,7 @@ void rei_settings_load(void)
 		else if (!strcmp(key, "last_game")) snprintf(g_settings.last_game, sizeof(g_settings.last_game), "%s", sval);
 		else if (!strcmp(key, "show_list")) g_settings.show_list = val != 0;
 		else if (!strcmp(key, "list_filter")) g_settings.list_filter = clampi(val, 0, REI_LIST_FILTER_COUNT - 1);
+		else if (!strcmp(key, "theme")) g_settings.theme = clampi(val, 0, REI_THEME_COUNT - 1);
 		else if (!strcmp(key, "list_all")) g_settings.list_filter = val ? REI_LIST_ALL : REI_LIST_PLAYABLE; // (old two-state filter)
 		else if (!strncmp(key, "dip", 3)) read_dips(key, val); // (old nbbatman-only file: nbbatman DIPs)
 	}
@@ -345,6 +347,7 @@ void rei_settings_save(void)
 	if (g_settings.show_list)
 		fprintf(f, "show_list=1\n");
 	fprintf(f, "list_filter=%d\n", g_settings.list_filter);
+	fprintf(f, "theme=%d\n", g_settings.theme);
 	fclose(f);
 	if (!s_game[0])
 		return;

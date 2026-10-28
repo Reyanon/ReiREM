@@ -92,16 +92,18 @@ psh "ls ms0:/PSP/GAME/REIREM" | grep -E " (meym|meysplit|z80drc|m107ge|m107mesnd
 echo "old enable files cleaned"
 # YSPLIT=1: the test build switches the YM2151 split at frames 900/1200/1500/1800 (exercises the switch path even in the demo)
 [ "${YSPLIT:-0}" = 1 ] && : > "$D/rei_ysplit"
-# SWITCH=1: move between games the same way as options "Select game" (host0:/rei_select: exit and relaunch EBOOT).
-#           Only the last game exits via HOME (2026-10-13: switching dsoccr94 → hook → rtypeleo hung while loading)
+# SWITCH=1: move between games the same way as options "Select game" (host0:/rei_select: the game ends, the app goes back to its
+#           game list in the same process and the list starts host0:/rei_game — no relaunch). Only the last game exits via HOME.
+#           The test build appends the free memory at each return to the list to host0:/rei_mem.txt (shown at the end: must not shrink)
 n=0; set -- $GAMES; last=$#
+rm -f "$D/rei_mem.txt"
 STARTED=1 # (from here on, failures reset back to XMB)
 for g in $GAMES; do
 	n=$((n+1))
 	echo "$(date +%T) $g start ($n/$last)"
 	echo "$g" > "$D/rei_game"
 	if [ "${SWITCH:-0}" = 1 ] && [ $n -gt 1 ]; then
-		touch "$D/rei_select" # (the previous game picks it up, exits and relaunches the installed build)
+		touch "$D/rei_select" # (the previous game picks it up, ends and the list in the same process starts this one)
 		for i in $(seq 1 15); do sleep 2; [ -f "$D/rei_select" ] || break; done
 		[ -f "$D/rei_select" ] && fail "$g: previous game did not take Select game (hung)"
 	else
@@ -124,6 +126,7 @@ for g in $GAMES; do
 	sleep 3
 done
 rm -f "$D/rei_ysplit"
+[ "${SWITCH:-0}" = 1 ] && { echo "free memory at each return to the list:"; cat "$D/rei_mem.txt" 2>/dev/null; }
 install_eboot build-psp-play/EBOOT.PBP
 echo "installing play build (all passed)"
 echo "PSP is in REIREM DEV (exit with HOME and launch ReiREM). Leaving the installed build running blocks the next check"

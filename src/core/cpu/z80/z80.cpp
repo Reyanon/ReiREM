@@ -4105,6 +4105,9 @@ void Z80Exit()
 	}
 	rei_z80_insns = 0;
 #endif
+#ifdef Z80_DRC
+	zd_exit(); // (ReiREM: in-app game switching, the next game starts with an empty code cache)
+#endif
 	Z80.spectrum_tape_cb = NULL;
 	Z80.spectrum_mode = 0;
 

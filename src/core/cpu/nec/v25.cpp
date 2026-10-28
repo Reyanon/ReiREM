@@ -288,10 +288,39 @@ static void do_prefetch(v25_state_t *nec_state, int previous_ICount, int sh)
 
 }
 
+// ReiREM port: do_prefetch with 2 cycles per byte (the V35) as a constant — the shifts and compares fold (same code otherwise)
+static inline __attribute__((always_inline)) void do_prefetch2(v25_state_t *nec_state, int previous_ICount)
+{
+	int diff = previous_ICount - (int) nec_state->icount;
+	int k = -nec_state->prefetch_count;
+	if (k > 0) {
+		int m = (diff > 0) ? ((diff - 1) >> 1) : 0;
+		if (m > k) m = k;
+		diff -= m << 1;
+		nec_state->icount -= (k - m) << 1;
+		nec_state->prefetch_count = 0;
+	}
+	if (nec_state->prefetch_reset) {
+		nec_state->prefetch_count = 0;
+		nec_state->prefetch_reset = 0;
+		return;
+	}
+	if (diff >= 2) {
+		int n = diff >> 1;
+		int room = nec_state->prefetch_size - nec_state->prefetch_count;
+		if (room > 0) nec_state->prefetch_count += (n < room) ? n : room;
+	}
+}
+
+// ReiREM port: PS<<4 of the instruction being run, set before each dispatch (v25_set_csb). Instructions that change PS or the
+// register bank fetch nothing after it, so operand fetches use it instead of reading PS from the register bank each byte
+static UINT32 v25_csb;
+static inline __attribute__((always_inline)) void v25_set_csb(v25_state_t *nec_state) { v25_csb = Sreg(PS) << 4; }
+
 NEC_INLINE UINT8 fetch(v25_state_t *nec_state)
 {
 	prefetch(nec_state);
-	return cpu_readop_arg(((Sreg(PS)<<4)+nec_state->ip++) ^ nec_state->fetch_xor);
+	return cpu_readop_arg((v25_csb+nec_state->ip++) ^ nec_state->fetch_xor);
 }
 
 NEC_INLINE UINT16 fetchword(v25_state_t *nec_state)
@@ -310,18 +339,17 @@ NEC_INLINE UINT16 fetchword(v25_state_t *nec_state)
 
 static UINT8 parity_table[256];
 
-static UINT8 fetchop(v25_state_t *nec_state)
+// (ReiREM port: inlined into the run loop and prefix handlers — a call per instruction on the Vita)
+static inline __attribute__((always_inline)) UINT8 fetchop(v25_state_t *nec_state)
 {
 	UINT8 ret;
 
 	prefetch(nec_state);
 	ret = cpu_readop(((Sreg(PS)<<4)+nec_state->ip++) ^ nec_state->fetch_xor);
 
-	if (nec_state->MF == 0)
-		if (nec_state->decode)
-		{
-			ret = nec_state->decode[ret];
-		}
+	const UINT8 *dec = nec_state->decode;
+	if (dec && nec_state->MF == 0)
+		ret = dec[ret];
 	return ret;
 }
 
@@ -474,6 +502,7 @@ static void nec_bankswitch(v25_state_t *nec_state, unsigned bank_num)
 
 static void nec_trap(v25_state_t *nec_state)
 {
+	v25_set_csb(nec_state);
 	nec_instruction[fetchop(nec_state)](nec_state);
 	nec_interrupt(nec_state, NEC_TRAP_VECTOR, BRK);
 }
@@ -1469,6 +1498,7 @@ static int v25_execute_drc(int cycles)
 		prev_ICount = nec_state->icount;
 		rei_ins_ic35 = prev_ICount;
 		rei_drc_stats[2]++;
+		v25_set_csb(nec_state);
 		nec_instruction[fetchop(nec_state)](nec_state);
 		do_prefetch(nec_state, prev_ICount, pf_sh);
 
@@ -1519,13 +1549,23 @@ static void v35_trace(v25_state_t *n, int done)
 #ifndef V35_PCLOG
 #define V35_PCLOG() ((void)0) // (build without dynarec)
 #endif
+#ifdef REI_DRC_ACTIVE
+static v25_state_t *drc35_chip; // (dynarec for one V35 only: the first chip to enter; M90/M72 chip 0, M107 sound chip 1)
+// (nec_intf VezExit, in-app game switching) code cache, tables and the chosen chip back to nothing for the next game
+extern "C" void rei_drc35_exit(void)
+{
+	drc_exit();
+	drc_v25_idb = 0xffffffffu;
+	drc35_jc_rbw = 0xffffffffu;
+	drc35_chip = NULL;
+	v25_drc_on = 0;
+}
+#endif
 int v25_execute(int cycles)
 {
 	v25_state_t *nec_state = sChipsPtr;
 	int prev_ICount;
 #ifdef REI_DRC_ACTIVE
-	// (dynarec for one V35 only: the first chip to enter; M90/M72 chip 0, M107 sound chip 1)
-	static v25_state_t *drc35_chip;
 	if (!drc35_chip) drc35_chip = nec_state;
 	if (rei_drc_enabled && nec_state == drc35_chip && nec_state->chip_type == V30_TYPE && nec_state->prefetch_cycles == 2 &&
 	    nec_state->prefetch_size == 6 && !nec_state->fetch_xor && drc35_allowed() && drc_init())
@@ -1595,7 +1635,9 @@ int v25_execute(int cycles)
 
 		// ReiREM Vita port: skip whole iterations of a known pure wait loop.
 		// Never skip across an internal timer expiry; skipped cycles are charged to the timers.
-		if (PC(nec_state) == idle_pc) {
+		v25_set_csb(nec_state);
+		const UINT32 pc_now = v25_csb + nec_state->ip; // (ReiREM: once per instruction; skipping does not move the PC)
+		if (pc_now == idle_pc) {
 			rei_tim_sync(nec_state);
 			int limit = nec_state->icount;
 			for (int i = 0; i < 4; i++)
@@ -1608,7 +1650,6 @@ int v25_execute(int cycles)
 						nec_state->timer_cycles_until_trigger[i] -= skipped;
 		}
 		{
-			const UINT32 pc_now = PC(nec_state);
 			V35_PCLOG();
 			if (pc_now <= auto_prev && auto_prev - pc_now <= V25_AUTO_SPAN && rei_v25_auto_enabled)
 				v25_auto_visit(nec_state, auto_cpu, pc_now, auto_prev);
@@ -1618,13 +1659,25 @@ int v25_execute(int cycles)
 		prev_ICount = nec_state->icount;
 		rei_ins_ic35 = prev_ICount;
 		REI_PCHIST_PC(rei_pc);
+		UINT8 op; // (ReiREM: fetchop with the PC computed above)
+		{
+			prefetch(nec_state);
+			nec_state->ip++;
+			op = cpu_readop(pc_now ^ nec_state->fetch_xor);
+			const UINT8 *dec = nec_state->decode;
+			if (dec && nec_state->MF == 0)
+				op = dec[op];
+		}
 #ifdef REI_DUMPPC35
 		{ static int done; if (!done && PC(nec_state) == REI_DUMPPC35) { done = 1; fprintf(stderr, "dump35 %05x:", REI_DUMPPC35 - 16);
 		  for (int i = 0; i < 64; i++) { UINT8 b = cpu_readop(REI_DUMPPC35 - 16 + i); fprintf(stderr, " %02x/%02x", b, (nec_state->MF == 0 && nec_state->decode) ? nec_state->decode[b] : b); }
 		  fprintf(stderr, "\n"); } }
 #endif
-		nec_instruction[fetchop(nec_state)](nec_state);
-		do_prefetch(nec_state, prev_ICount, pf_sh);
+		nec_instruction[op](nec_state);
+		if (pf_sh == 1)
+			do_prefetch2(nec_state, prev_ICount);
+		else
+			do_prefetch(nec_state, prev_ICount, pf_sh);
 		REI_PCHIST_ADD(1, rei_pc, prev_ICount - nec_state->icount);
 
 		// timers! (ReiREM port: applied lazily, see rei_tim_sync)

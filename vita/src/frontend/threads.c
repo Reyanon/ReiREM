@@ -75,8 +75,32 @@ static int ym_thread(SceSize args, void *argp)
 	return sceKernelExitDeleteThread(0);
 }
 
+// M72-family boards without MCU: the Z80 (and the YM2151 it writes) on CPU1 right behind the V30, instead of the YM2151 worker
+static int s_ym_is_z80;
+static int z80_thread(SceSize args, void *argp)
+{
+	(void)args;
+	(void)argp;
+	rei_core_z80_worker_run();
+	return sceKernelExitDeleteThread(0);
+}
+
 int rei_threads_start_ym(void)
 {
+	if (rei_core_z80_worker()) {
+		rei_core_z80_worker_enable(1);
+		s_ym = sceKernelCreateThread("rei_z80", z80_thread, SOUND_PRIORITY, 64 * 1024, 0, SCE_KERNEL_CPU_MASK_USER_1, NULL);
+		if (s_ym < 0) {
+			REI_LOG("threads: z80 thread create failed 0x%08x", s_ym);
+			rei_core_z80_worker_enable(0);
+			return -1;
+		}
+		s_ym_is_z80 = 1;
+		sceKernelStartThread(s_ym, 0, NULL);
+		REI_LOG("threads: Z80 worker started on CPU1");
+		return 0;
+	}
+	s_ym_is_z80 = 0;
 	if (!rei_core_ym_worker())
 		return -1;
 	rei_core_ym_worker_enable(1);
@@ -94,7 +118,10 @@ int rei_threads_start_ym(void)
 void rei_threads_stop(void)
 {
 	if (s_ym >= 0) {
-		rei_core_ym_worker_enable(0); // (main takes over after synthesizing all pending writes)
+		if (s_ym_is_z80)
+			rei_core_z80_worker_enable(0); // (between frames: the worker waits for the next one)
+		else
+			rei_core_ym_worker_enable(0); // (main takes over after synthesizing all pending writes)
 		rei_core_stop();
 		sceKernelWaitThreadEnd(s_ym, NULL, NULL);
 		s_ym = -1;

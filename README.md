@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="vita/sce_sys/icon0.png" width="128" alt="ReiREM icon">
+<img width="840" height="500" alt="ReiREM" src="vita/sce_sys_src/bg.png" />
 </p>
 
 <h1 align="center">ReiREM</h1>
@@ -14,15 +14,16 @@
 ## Table of Contents
 
 1. [Introduction](#1-introduction)
-2. [Highlights](#2-highlights)
-3. [Supported Boards and Games](#3-supported-boards-and-games)
-4. [Download](#4-download)
-5. [Installation](#5-installation)
-6. [Usage](#6-usage)
-7. [Building from Source](#7-building-from-source)
-8. [Project Layout](#8-project-layout)
-9. [Accuracy and Testing](#9-accuracy-and-testing)
-10. [License and Credits](#10-license-and-credits)
+2. [What's New](#2-whats-new)
+3. [Highlights](#3-highlights)
+4. [Supported Boards and Games](#4-supported-boards-and-games)
+5. [Download](#5-download)
+6. [Installation](#6-installation)
+7. [Usage](#7-usage)
+8. [Building from Source](#8-building-from-source)
+9. [Project Layout](#9-project-layout)
+10. [Accuracy and Testing](#10-accuracy-and-testing)
+11. [License and Credits](#11-license-and-credits)
 
 ---
 
@@ -40,7 +41,37 @@ than the hardware these games were written for.
 Both ports share one emulation core (`src/core`). Frame and audio hashes are checked against a desktop
 reference harness so that every optimization keeps the emulation bit-exact.
 
-## 2. Highlights
+## 2. What's New
+
+Changes since v0.1.279.
+
+### PS Vita
+
+- New interface: game list with board tabs and Playable / All / Favorites filters, in-game menu, loading screen
+  and six color themes (Graphite by default).
+- Games are switched inside the app: *Select game* goes back to the game list without restarting.
+  ROMs load on a background thread while the loading screen animates.
+- The PS button opens the in-game menu (kernel helper bundled with the app, nothing to install).
+- Built-in updates: the app checks GitHub at start and can download and install a new version
+  (see [Updates](#updates-ps-vita)).
+- Touch buttons: place on-screen buttons that press any key, with a layout editor.
+- Smooth 60 fps scrolling in the game list.
+- Louder output with a soft limiter.
+- Default border artwork follows the theme color.
+- M72 board family optimized: the sound CPU runs on its own core next to the main CPU, and the V35 interpreter
+  is faster (also helps M90 and the M107 sound CPU).
+- New defaults: 4:3, smooth filter, scanlines off, FPS display off, turbo off.
+
+### PSP
+
+- The same new interface as on the Vita, drawn with the GE and a bundled bitmap font (Noto Sans) made for the PSP screen.
+- Games are switched inside the app without restarting the EBOOT; ROMs load on a background thread
+  while the loading screen animates.
+- More stable game switching (the Media Engine stays ready between games).
+- Louder output with a soft limiter.
+- Default border artwork follows the theme color.
+
+## 3. Highlights
 
 **Emulation**
 - 10 Irem board families, 196 sets (parents, clones and hacks): M52, M57, M58, M62, M63, M72, M75/77, M90/97, M92, M107.
@@ -59,14 +90,16 @@ reference harness so that every optimization keeps the emulation bit-exact.
 **Vita port (Cortex-A9 @ 444 MHz)**
 - Three-core layout: main CPU emulation, sound CPU + synthesis, and rendering on separate cores.
 - NEON tile drawing, dynamic audio rate control (+-0.5 %) and vsync-locked frame pacing.
+- PS button menu, touch buttons and built-in updates.
 
 **Frontend (both platforms)**
-- Game list with per-board tabs and a Playable / All filter.
+- Game list with per-board tabs, Playable / All / Favorites filters and six color themes.
+- Game switching inside the app, with a loading screen while the ROMs load.
 - Save states (10 slots plus quick save), DIP switches, button mapping with turbo, cheats (FBNeo `.ini` format).
-- Display options: aspect ratio, filter, border color or user artwork.
+- Display options: aspect ratio, filter, scanlines, border color or user artwork.
 - Per-game settings: save the current display and control settings for one game only.
 
-## 3. Supported Boards and Games
+## 4. Supported Boards and Games
 
 All sets are the FinalBurn Neo sets of the same name. ROMs must match the FinalBurn Neo romset
 (non-merged or split; clone sets read missing files from the parent zip).
@@ -217,9 +250,9 @@ Click a board to expand its list.
 | `lohtb2` | `loht` | 1989 | Legend of Hero Tonma (Japan, bootleg with i8751) | Playable<br>~55 fps |
 | `lohtb3` | `loht` | 1997 | Legend of Hero Tonma (World, bootleg with i8751) | Playable<br>~55 fps |
 | `lohtj` | `loht` | 1989 | Legend of Hero Tonma (Japan) | Playable<br>~55 fps |
-| `ltswords` |  | 1991 | Lightning Swords (World) | Partial<br>~40 fps |
-| `kengo` | `ltswords` | 1991 | Ken-Go (World) | Partial<br>~40 fps |
-| `kengoj` | `ltswords` | 1991 | Ken-Go (Japan) | Partial<br>~40 fps |
+| `ltswords` |  | 1991 | Lightning Swords (World) | Playable<br>~55 fps |
+| `kengo` | `ltswords` | 1991 | Ken-Go (World) | Playable<br>~55 fps |
+| `kengoj` | `ltswords` | 1991 | Ken-Go (Japan) | Playable<br>~55 fps |
 | `majtitle` |  | 1990 | Major Title (World) | Playable<br>~55 fps |
 | `majtitlej` | `majtitle` | 1990 | Major Title (Japan) | Playable<br>~55 fps |
 | `nspirit` |  | 1988 | Ninja Spirit (World) | Playable<br>~55 fps |
@@ -631,7 +664,7 @@ Click a board to expand its list.
 
 </details>
 
-## 4. Download
+## 5. Download
 
 Prebuilt binaries are published on the [Releases](../../releases) page:
 
@@ -643,7 +676,7 @@ Prebuilt binaries are published on the [Releases](../../releases) page:
 The releases contain the emulator only. **No ROMs, BIOS files or game artwork are included or provided.**
 You must supply ROM images of games you own.
 
-## 5. Installation
+## 6. Installation
 
 ### PS Vita
 
@@ -660,6 +693,9 @@ Requirements: a PS Vita or PS TV that can install homebrew VPK files with [VitaS
    Accept the extended permissions prompt. A **ReiREM** bubble appears on the home screen (title ID `M92A00001`).
 5. The `.vpk` file can be deleted after installation.
 
+The first start after each boot restarts the app once: it loads its kernel helper (`rei_kctrl.skprx`, inside the app)
+that lets the PS button open the menu and installs updates. No plugin needs to be installed.
+
 **Add ROMs**
 
 1. Copy the `data` folder from the zip to the root of `ux0:` so that the empty folder is
@@ -667,6 +703,16 @@ Requirements: a PS Vita or PS TV that can install homebrew VPK files with [VitaS
 2. Put your ROM zips in that folder, unchanged and not extracted, for example
    `ux0:data/reirem/roms/nbbatman.zip`.
 3. Start ReiREM. The game list shows every recognized set, grouped by board.
+
+<a id="updates-ps-vita"></a>
+**Updates (PS Vita)**
+
+When the app starts it checks the GitHub releases in the background. If a newer version is out, the game list
+shows its changes with **Update**, **Close** or **Skip this version**. *Update* downloads the new package, installs it
+after the app closes and returns to the home screen; start ReiREM again afterwards. Without a connection nothing
+happens. Versions older than this one have to be updated by hand once.
+
+The PSP version has no built-in updater: replace `EBOOT.PBP` with the one from the new release.
 
 ### PSP
 
@@ -688,7 +734,7 @@ Requirements: a PSP-3000 or PSP go that can run homebrew. The emulator uses the 
 
 ### ROM sets
 
-- ROMs must be **FinalBurn Neo** compatible sets with the set names listed in [section 3](#3-supported-boards-and-games)
+- ROMs must be **FinalBurn Neo** compatible sets with the set names listed in [section 4](#4-supported-boards-and-games)
   (MAME sets of the same name usually match).
 - Keep each set as one zip named after the set, for example `rtype.zip`. Do not rename or extract them.
 - Clone sets (for example `nbbatmanu`) read missing files from the parent zip (`nbbatman.zip`), so keep the
@@ -702,7 +748,7 @@ Requirements: a PSP-3000 or PSP go that can run homebrew. The emulator uses the 
 | Cheats (FBNeo `.ini`) | `ux0:data/reirem/cheats/<set>.ini` | `PSP/GAME/REIREM/cheats/<set>.ini` |
 | Border artwork | `ux0:data/reirem/artwork/<set>.png` | `PSP/GAME/REIREM/artwork/<set>.png` |
 
-## 6. Usage
+## 7. Usage
 
 **Game list**
 
@@ -721,11 +767,12 @@ Options opened from the game list edit the global settings.
 
 | Action | Buttons |
 |---|---|
-| Open the in-game menu | SELECT + START |
+| Open the in-game menu | SELECT + START (Vita: also the PS button) |
 | Quick save / quick load | SELECT + L / SELECT + R |
 
-The in-game menu provides: Resume, Reset, Save states (10 slots), Display (aspect ratio, filter, border),
-Controls (button mapping, turbo), DIP switches, Cheats, per-game settings and game selection.
+The in-game menu provides: Resume, Reset, Save states (10 slots), Display (aspect ratio, filter, scanlines, border,
+theme), Controls (button mapping, turbo; Vita: touch buttons), DIP switches, Cheats, per-game settings and
+*Select game*, which goes back to the game list without restarting the app.
 
 **Turbo.** Pick one *Turbo key* and the game button it fires (*Turbo button*), plus the speed
 (15, 10 or 7.5 presses per second). While the turbo key is held, that game button fires repeatedly.
@@ -736,7 +783,7 @@ automatically, and the menu shows *Delete game settings* instead.
 
 The last played game is remembered and started on the next launch.
 
-## 7. Building from Source
+## 8. Building from Source
 
 Builds are done on Linux or WSL (Ubuntu 24.04 is used for development).
 
@@ -784,7 +831,7 @@ cmake -S tools/harness -B build-pc && cmake --build build-pc -j
 ./build-pc/harness --rom path/to/nbbatman.zip --frames 3600
 ```
 
-## 8. Project Layout
+## 9. Project Layout
 
 ```
 src/core/      FinalBurn Neo subset: Irem drivers, NEC/Z80 cores, YM2151, GA20, AY, MSM5205 + shim
@@ -794,7 +841,7 @@ psp/           PSP port (frontend, Media Engine code, MIPS dynarec glue, XMB ass
 tools/         Build script, desktop harness, audio checks
 ```
 
-## 9. Accuracy and Testing
+## 10. Accuracy and Testing
 
 - Every performance change is checked against the desktop harness: frame hashes and audio hashes must
   match the unmodified FinalBurn Neo path over thousands of frames for each board.
@@ -802,7 +849,7 @@ tools/         Build script, desktop harness, audio checks
   and compares hashes with the interpreter.
 - Intentional differences (for example the fixed sound-to-main latency) are kept deterministic and documented.
 
-## 10. License and Credits
+## 11. License and Credits
 
 **License.** ReiREM is derived from FinalBurn Neo and is distributed under the
 [FinalBurn Neo license](LICENSE-FBNeo.txt). **Non-commercial use only**: the emulator may not be sold or
@@ -816,6 +863,8 @@ bundled with commercial products. The original copyright headers are kept in all
 - [pspdev / PSPSDK](https://github.com/pspdev/pspdev).
 - psp-media-engine-custom-core (MIT) for the Media Engine bootstrap.
 - [stb_image](https://github.com/nothings/stb) (public domain), [zlib](https://zlib.net/).
+- [Mbed TLS](https://github.com/Mbed-TLS/mbedtls) (Apache 2.0) for the Vita update check.
+- [Noto Sans](https://fonts.google.com/noto) (SIL Open Font License 1.1, `psp/font/OFL.txt`) for the PSP menu font.
 
 **Trademarks.** Irem and all game titles are trademarks of their respective owners. This project is not
 affiliated with or endorsed by Irem Software Engineering or any rights holder. No ROM images, game

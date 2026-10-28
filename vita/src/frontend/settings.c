@@ -6,18 +6,19 @@
 
 #include <psp2/ctrl.h>
 
+#include "frontend/touch.h"
 #include "platform/log.h"
 
 #define SETTINGS_PATH REI_DATA_DIR "settings.cfg"
 #define FAV_PATH REI_DATA_DIR "favorites.cfg"
 
-// Defaults (set 2026-10-11): FPS off, Integer 2x, Sharp, 2px scanlines Medium, confirm X, art border,
+// Defaults (set 2026-10-28): FPS off, 4:3, Smooth, scanlines off (Medium when on), confirm X, art border, Graphite,
 // attack □ jump △ coin SELECT start START, turbo off (button 1 when set), DIP 2 bytes (157, 247)
 rei_settings g_settings = {
 	.show_fps = 0,
-	.aspect = REI_ASPECT_INT2X,
-	.filter = REI_FILTER_POINT,
-	.scan_type = REI_SCAN_PX2,
+	.aspect = REI_ASPECT_4_3,
+	.filter = REI_FILTER_LINEAR,
+	.scan_type = REI_SCAN_OFF,
 	.scan_strength = REI_SCAN_MEDIUM,
 	.border = REI_BORDER_ARTWORK,
 	.border_color = REI_BCOL_GRAY,
@@ -30,6 +31,11 @@ rei_settings g_settings = {
 	.cheat_health = 0,
 	.dip_count = 2,
 	.dip = { 157, 247 },
+	.rotate = REI_ROT_AUTO,
+	.stick = REI_STICK_LEFT,
+	.touch_keys = 1,
+	.touch_show = 1,
+	.theme = REI_THEME_GRAPHITE,
 };
 
 static const char *const s_keymap_keys[REI_ACT_COUNT] = { "key_attack", "key_jump", "key_coin", "key_start",
@@ -48,6 +54,10 @@ void rei_settings_default_keys(void)
 	g_settings.turbo_key = REI_KEY_NONE;
 	g_settings.turbo_btn = 1;
 	g_settings.turbo_speed = REI_TURBO_FAST;
+	g_settings.stick = REI_STICK_LEFT;
+	g_settings.touch_keys = 1;
+	g_settings.touch_show = 1;
+	memset(g_settings.combo, 0, sizeof(g_settings.combo));
 }
 
 int rei_turbo_period(void)
@@ -85,6 +95,20 @@ static int clampi(int v, int lo, int hi)
 	return v < lo ? lo : (v > hi ? hi : v);
 }
 
+static const char *const s_combo_keys[REI_COMBO_KEYS] = { "cross", "circle", "square", "triangle", "l", "r" };
+// a combo value is two different keys of Cross..R
+static int combo_ok(int v)
+{
+	int n = 0;
+	for (int k = 0; k < REI_KEY_COUNT; k++)
+		if (v & (1 << k)) {
+			if (k >= REI_COMBO_KEYS)
+				return 0;
+			n++;
+		}
+	return n == 2;
+}
+
 // Parse one "key=value" line (integer values, only last_game is text). Returns 1 on success
 static int read_kv(FILE *f, char *key, int klen, char *val, int vlen)
 {
@@ -118,8 +142,10 @@ static void read_dips(const char *key, int val)
 
 // Per-game overridable items (global values kept in s_global)
 typedef struct {
-	int show_fps, aspect, filter, scan_type, scan_strength, border, border_color;
-	int keymap[REI_ACT_COUNT], turbo_key, turbo_btn, turbo_speed;
+	int show_fps, aspect, filter, scan_type, scan_strength, border, border_color, rotate;
+	int keymap[REI_ACT_COUNT], turbo_key, turbo_btn, turbo_speed, stick;
+	int combo[REI_COMBO_KEYS];
+	int touch_keys, touch_show;
 } game_part;
 static game_part s_global;   // values from the global settings file (written back to it while per-game settings are on)
 static int s_game_on;        // per-game settings are on for the current game
@@ -132,6 +158,9 @@ static void part_get(game_part *g)
 	memcpy(g->keymap, g_settings.keymap, sizeof(g->keymap));
 	g->turbo_key = g_settings.turbo_key; g->turbo_btn = g_settings.turbo_btn;
 	g->turbo_speed = g_settings.turbo_speed;
+	g->rotate = g_settings.rotate; g->stick = g_settings.stick;
+	memcpy(g->combo, g_settings.combo, sizeof(g->combo));
+	g->touch_keys = g_settings.touch_keys; g->touch_show = g_settings.touch_show;
 }
 static void part_set(const game_part *g)
 {
@@ -141,6 +170,9 @@ static void part_set(const game_part *g)
 	memcpy(g_settings.keymap, g->keymap, sizeof(g->keymap));
 	g_settings.turbo_key = g->turbo_key; g_settings.turbo_btn = g->turbo_btn;
 	g_settings.turbo_speed = g->turbo_speed;
+	g_settings.rotate = g->rotate; g_settings.stick = g->stick;
+	memcpy(g_settings.combo, g->combo, sizeof(g->combo));
+	g_settings.touch_keys = g->touch_keys; g_settings.touch_show = g->touch_show;
 }
 // Old turbo lines (turbo_attack / turbo_jump, one key per button) seen in the file being read. If the file has no turbo_key,
 // parse_end maps them to the single turbo key: attack -> button 1, else jump -> button 2
@@ -154,6 +186,10 @@ static void parse_end(void)
 {
 	if (s_new_turbo)
 		return;
+	// the old default (attack turbo on ×, jump off) was written to every file, chosen or not: turbo is now off by
+	// default, so that pair means off
+	if (s_old_turbo[0] == REI_KEY_CROSS && (s_old_turbo[1] < 0 || s_old_turbo[1] == REI_KEY_NONE))
+		s_old_turbo[0] = REI_KEY_NONE;
 	if (s_old_turbo[0] >= 0 && s_old_turbo[0] != REI_KEY_NONE) {
 		g_settings.turbo_key = s_old_turbo[0];
 		g_settings.turbo_btn = 1;
@@ -180,7 +216,18 @@ static int read_part(const char *key, int val)
 	else if (!strcmp(key, "turbo_attack")) s_old_turbo[0] = clampi(val, 0, REI_KEY_NONE);
 	else if (!strcmp(key, "turbo_jump")) s_old_turbo[1] = clampi(val, 0, REI_KEY_NONE);
 	else if (!strcmp(key, "turbo_speed")) g_settings.turbo_speed = clampi(val, 0, REI_TURBO_SPEED_COUNT - 1);
-	else {
+	else if (!strcmp(key, "rotate")) g_settings.rotate = clampi(val, 0, REI_ROT_COUNT - 1);
+	else if (!strcmp(key, "stick")) g_settings.stick = clampi(val, 0, REI_STICK_COUNT - 1);
+	else if (!strcmp(key, "touch_keys")) g_settings.touch_keys = val != 0;
+	else if (!strcmp(key, "touch_show")) g_settings.touch_show = val != 0;
+	else if (!strncmp(key, "combo_", 6)) { // combo_<key>=<mask of two keys>
+		for (int k = 0; k < REI_COMBO_KEYS; k++)
+			if (!strcmp(key + 6, s_combo_keys[k])) {
+				g_settings.combo[k] = combo_ok(val) ? val : 0;
+				return 1;
+			}
+		return 0;
+	} else {
 		for (int a = 0; a < REI_ACT_COUNT; a++)
 			if (!strcmp(key, s_keymap_keys[a])) {
 				g_settings.keymap[a] = clampi(val, 0, a >= REI_ACT_B3 ? REI_KEY_NONE : REI_KEY_COUNT - 1);
@@ -198,6 +245,9 @@ static void write_part(FILE *f, const game_part *g)
 	for (int a = 0; a < REI_ACT_COUNT; a++)
 		fprintf(f, "%s=%d\n", s_keymap_keys[a], g->keymap[a]);
 	fprintf(f, "turbo_key=%d\nturbo_btn=%d\nturbo_speed=%d\n", g->turbo_key, g->turbo_btn, g->turbo_speed);
+	fprintf(f, "rotate=%d\nstick=%d\ntouch_keys=%d\ntouch_show=%d\n", g->rotate, g->stick, g->touch_keys, g->touch_show);
+	for (int k = 0; k < REI_COMBO_KEYS; k++)
+		fprintf(f, "combo_%s=%d\n", s_combo_keys[k], g->combo[k]);
 }
 
 // Favorite games: set names in favorites.cfg, one per line
@@ -268,6 +318,7 @@ void rei_settings_load(void)
 		else if (!strcmp(key, "show_list")) g_settings.show_list = val != 0;
 		else if (!strcmp(key, "list_filter")) g_settings.list_filter = clampi(val, 0, REI_LIST_FILTER_COUNT - 1);
 		else if (!strcmp(key, "list_all")) g_settings.list_filter = val ? REI_LIST_ALL : REI_LIST_PLAYABLE; // (old two-state filter)
+		else if (!strcmp(key, "theme")) g_settings.theme = clampi(val, 0, REI_THEME_COUNT - 1);
 		else if (!strncmp(key, "dip", 3)) read_dips(key, val); // (nbbatman-only era file: nbbatman's DIP)
 	}
 	fclose(f);
@@ -281,6 +332,13 @@ void rei_settings_load(void)
 static void game_path(char *buf, int len)
 {
 	snprintf(buf, len, REI_DATA_DIR "%s.cfg", s_game);
+}
+
+void rei_settings_touch_follow(int keep)
+{
+	char p[96];
+	snprintf(p, sizeof(p), REI_DATA_DIR "%s_touch.cfg", s_game);
+	rei_touch_select(s_game[0] && s_game_on ? p : NULL, keep);
 }
 
 void rei_settings_load_game(const char *set)
@@ -306,6 +364,7 @@ void rei_settings_load_game(const char *set)
 		s_game_on = 1;
 		REI_LOG("settings: game settings %s", p);
 	}
+	rei_settings_touch_follow(0); // (the game's touch layout with its settings, else the global one)
 	game_path(p, sizeof(p));
 	f = fopen(p, "r");
 	if (!f) {
@@ -338,7 +397,7 @@ void rei_settings_save(void)
 		fprintf(f, "last_game=%s\n", g_settings.last_game);
 	if (g_settings.show_list)
 		fprintf(f, "show_list=1\n");
-	fprintf(f, "list_filter=%d\n", g_settings.list_filter);
+	fprintf(f, "list_filter=%d\ntheme=%d\n", g_settings.list_filter, g_settings.theme);
 	fclose(f);
 	if (!s_game[0])
 		return;
@@ -367,6 +426,7 @@ void rei_settings_use_global(void)
 		s_game_on = 0;
 	}
 	s_game[0] = 0; // (no per-game files written until the next rei_settings_load_game)
+	rei_settings_touch_follow(0);
 }
 
 int rei_settings_save_game(void)
@@ -384,7 +444,10 @@ int rei_settings_save_game(void)
 	part_get(&g);
 	write_part(f, &g);
 	fclose(f);
-	s_game_on = 1;
+	if (!s_game_on) {
+		s_game_on = 1;
+		rei_settings_touch_follow(1); // (the touch layout now is the game's too)
+	}
 	return 1;
 }
 
@@ -399,6 +462,9 @@ int rei_settings_delete_game(void)
 		return 0;
 	}
 	s_game_on = 0;
+	snprintf(p, sizeof(p), REI_DATA_DIR "%s_touch.cfg", s_game);
+	remove(p);
 	part_set(&s_global); // (straight to global values)
+	rei_settings_touch_follow(0);
 	return 1;
 }

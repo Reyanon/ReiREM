@@ -51,6 +51,7 @@ static volatile uint32_t s_tail; // total read by consumer
 static int s_port = -1;
 static SceUID s_thread = -1;
 static volatile int s_running;
+static volatile int s_reset; // main asks the output thread to start the ring over
 static volatile uint32_t s_underruns, s_overflows;
 
 static int audio_thread(SceSize args, void *argp)
@@ -64,6 +65,10 @@ static int audio_thread(SceSize args, void *argp)
 	int started = 0;
 
 	while (s_running) {
+		if (__atomic_load_n(&s_reset, __ATOMIC_ACQUIRE)) { // (a new game: empty ring, prefill again)
+			started = 0;
+			__atomic_store_n(&s_reset, 0, __ATOMIC_RELEASE);
+		}
 		uint32_t head = __atomic_load_n(&s_head, __ATOMIC_ACQUIRE);
 		uint32_t tail = s_tail;
 		uint32_t avail = head - tail;
@@ -93,13 +98,36 @@ static int audio_thread(SceSize args, void *argp)
 #endif
 		sceAudioOutOutput(s_port, buf); // blocks until the hardware consumes it
 	}
-	return sceKernelExitDeleteThread(0);
+	return 0;
+}
+
+static int32_t s_drc_err;
+static volatile int32_t s_drc_ppm;
+// The output port and thread live as long as the app (in-app game switching): each game only starts the ring over.
+// (Opening a port per game leaked ports: a port still in sceAudioOutOutput is not released, and after 8 games the
+// open failed, 0x80260005)
+static void ring_restart(void)
+{
+	if (s_thread >= 0) { // the output thread drops its prefilled state (waits at most one grain)
+		__atomic_store_n(&s_reset, 1, __ATOMIC_RELEASE);
+		for (int i = 0; i < 200 && __atomic_load_n(&s_reset, __ATOMIC_ACQUIRE); i++)
+			sceKernelDelayThread(500);
+	}
+	s_tail = s_head;
+	s_drc_err = 0;
+	s_drc_ppm = 0;
+	s_underruns = s_overflows = 0;
+	rei_resample_init();
 }
 
 int rei_audio_init(void)
 {
+	if (s_port >= 0) {
+		ring_restart();
+		return 0;
+	}
 	s_head = s_tail = 0;
-	rei_resample_init();
+	ring_restart();
 	s_port = sceAudioOutOpenPort(SCE_AUDIO_OUT_PORT_TYPE_MAIN, GRAIN, REI_AUDIO_RATE,
 		SCE_AUDIO_OUT_MODE_STEREO);
 	if (s_port < 0) {
@@ -123,13 +151,20 @@ int rei_audio_init(void)
 
 void rei_audio_fini(void)
 {
+	ring_restart(); // (game end: what is left in the ring is not played; the port stays for the next game)
+}
+
+void rei_audio_shutdown(void)
+{
 	if (s_thread >= 0) {
 		s_running = 0;
-		sceKernelWaitThreadEnd(s_thread, NULL, NULL);
+		sceKernelWaitThreadEnd(s_thread, NULL, NULL); // (the thread ends itself; it is not deleted while running)
 		s_thread = -1;
 	}
 	if (s_port >= 0) {
-		sceAudioOutReleasePort(s_port);
+		const int r = sceAudioOutReleasePort(s_port);
+		if (r < 0)
+			REI_LOG("audio: release port failed 0x%08x", r);
 		s_port = -1;
 	}
 }
@@ -140,8 +175,7 @@ void rei_audio_fini(void)
 #define DRC_TARGET   1600                  // target fill (sample pairs)
 #define DRC_MAX_PPM  5000                  // max adjustment 0.5%
 static int16_t s_drc_out[(REI_RESAMPLE_MAX_IN + REI_RESAMPLE_MAX_IN / 64 + 4) * 2];
-static int32_t s_drc_err;                  // low-passed fill error (sample pairs * 256)
-static volatile int32_t s_drc_ppm;         // current adjustment (stats)
+// s_drc_err: low-passed fill error (sample pairs * 256); s_drc_ppm: current adjustment (stats). Both above rei_audio_init
 
 static void ring_put(uint32_t *head, uint32_t tail, int16_t l, int16_t r)
 {
@@ -151,6 +185,19 @@ static void ring_put(uint32_t *head, uint32_t tail, int16_t l, int16_t r)
 	}
 	s_ring[*head & RING_MASK] = (uint16_t)l | ((uint32_t)(uint16_t)r << 16);
 	(*head)++;
+}
+
+// output gain (as ReSys12 / ReST-V): the sound was too quiet on the Vita speaker. Doubled, with a soft limit above 75% of
+// full scale instead of clipping: past the knee the curve bends smoothly towards full scale (same slope at the knee)
+static inline int16_t out_gain(int32_t v)
+{
+	enum { KNEE = 24576, ROOM = 32767 - KNEE };
+	v *= 2;
+	const int32_t m = v < 0 ? -v : v;
+	if (m <= KNEE)
+		return (int16_t)v;
+	const int32_t e = m - KNEE, y = KNEE + (int32_t)((int64_t)e * ROOM / (e + ROOM));
+	return (int16_t)(v < 0 ? -y : y);
 }
 
 void rei_audio_push(const int16_t *samples, int frames)
@@ -170,7 +217,7 @@ void rei_audio_push(const int16_t *samples, int frames)
 
 	int n = rei_resample(samples, frames, step, s_drc_out);
 	for (int i = 0; i < n; i++)
-		ring_put(&head, tail, s_drc_out[i * 2], s_drc_out[i * 2 + 1]);
+		ring_put(&head, tail, out_gain(s_drc_out[i * 2]), out_gain(s_drc_out[i * 2 + 1]));
 	__atomic_store_n(&s_head, head, __ATOMIC_RELEASE);
 }
 

@@ -31,8 +31,15 @@ enum {
 
 enum { REI_SCAN_LIGHT, REI_SCAN_MEDIUM, REI_SCAN_HEAVY, REI_SCAN_STRENGTH_COUNT };
 
-// Margin outside the game screen (4:3 / Integer 2x). Artwork is app0:art/side*.png (made by tools/prepare_sce_sys.py)
+// Margin outside the game screen (4:3 / Integer 2x). Artwork: the user's artwork/<set>.png, else the app's blank artwork
 enum { REI_BORDER_BLACK, REI_BORDER_ARTWORK, REI_BORDER_COLOR, REI_BORDER_COUNT };
+// Screen rotation: Auto = vertical games upright on the landscape screen; Off = the game's buffer as it is; Vertical L / R =
+// upright with the Vita turned left (right edge up) / right (left edge up), directions turned with it
+enum { REI_ROT_AUTO, REI_ROT_OFF, REI_ROT_VL, REI_ROT_VR, REI_ROT_COUNT };
+// Menu colour theme (global; Graphite is the ReiREM default, Red ReSys12's, Blue ReST-V's)
+enum { REI_THEME_RED, REI_THEME_BLUE, REI_THEME_GREEN, REI_THEME_PURPLE, REI_THEME_ORANGE, REI_THEME_GRAPHITE, REI_THEME_COUNT };
+// Analog stick used as the joystick
+enum { REI_STICK_OFF, REI_STICK_LEFT, REI_STICK_RIGHT, REI_STICK_BOTH, REI_STICK_COUNT };
 enum { REI_BCOL_NAVY, REI_BCOL_GRAY, REI_BCOL_MAROON, REI_BCOL_GREEN, REI_BCOL_PURPLE, REI_BCOL_BRICK, REI_BCOL_COUNT };
 
 // Options screen confirm button (the other one is back)
@@ -57,6 +64,9 @@ enum {
 
 // Turbo: one Vita button (REI_KEY_NONE = off) fires one game button (1..REI_TURBO_BUTTONS)
 #define REI_KEY_NONE REI_KEY_COUNT
+// Combo keys: a Vita button (Cross, Circle, Square, Triangle, L, R = REI_KEY_CROSS..REI_KEY_R) can act as two other Vita
+// buttons pressed together. combo[key] = bit mask (1 << REI_KEY_*) of those two, 0 = normal
+#define REI_COMBO_KEYS 6
 #define REI_TURBO_BUTTONS 6
 enum { REI_TURBO_FAST, REI_TURBO_MEDIUM, REI_TURBO_SLOW, REI_TURBO_SPEED_COUNT };
 
@@ -85,6 +95,12 @@ typedef struct {
 	char last_game[16];                 // set name of the last game played (game list cursor)
 	int list_filter;                    // game list filter: REI_LIST_*
 	int show_list;                      // show the list next start even with one game (options screen Select game)
+	int rotate;                         // REI_ROT_*
+	int stick;                          // REI_STICK_*
+	int combo[REI_COMBO_KEYS];          // combo keys (see REI_COMBO_KEYS)
+	int touch_keys;                     // the touch screen buttons press their keys
+	int touch_show;                     // the touch buttons are drawn over the game
+	int theme;                          // REI_THEME_* (global only)
 } rei_settings;
 
 extern rei_settings g_settings;
@@ -105,6 +121,10 @@ int rei_settings_delete_game(void);  // delete per-game settings and revert to g
 // Game list options: drop the current game's settings (if any) so menus edit and rei_settings_save writes only the global
 // values. The next rei_settings_load_game applies that game's file again
 void rei_settings_use_global(void);
+
+// the touch button layout file that goes with the settings in use: the game's (<set>_touch.cfg, when it has its own settings)
+// or the global touch.cfg (keep = 1: the layout now is written to it; else it is read). Called by the settings functions
+void rei_settings_touch_follow(int keep);
 
 // Favorite games (favorites.cfg next to settings.cfg, one set name per line; loaded by rei_settings_load)
 int rei_fav_is(const char *set);

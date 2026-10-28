@@ -22,11 +22,11 @@
 #include "rei_core.h"
 #include "rei_games.h"
 #include "settings.h"
+#include "ui.h"
 #include "video.h"
 #include "ge_m72.h"
 #ifdef REI_PSP_ME
 #include <kubridge.h>
-#include "reilaunch_prx.c" // kernel module that relaunches our own EBOOT (psp/CMakeLists.txt, devstub reilaunch)
 #endif
 #ifdef REI_PSP_ME
 #include <pspaudio.h>
@@ -163,6 +163,21 @@ static void drc_idle_work(int left_us)
 #endif
 
 static volatile int g_quit;
+static volatile int g_to_list;      // the game ended for Select game: back to the game list in this process
+static volatile int g_playing;      // in a game's frame loop (test triggers act only then)
+#if defined(REI_LOG_ENABLED) || defined(REI_PSP_TESTGAME)
+// (test) host0:/rei_select: Select game as in the options screen, during play (play_check in-app switching; the list then picks
+// the game named in host0:/rei_game). Polled about once a second by the watchdog / test thread
+static void select_poll(void)
+{
+	SceIoStat st;
+	if (g_playing && !g_quit && sceIoGetstat("host0:/rei_select", &st) >= 0) {
+		sceIoRemove("host0:/rei_select");
+		g_to_list = 1;
+		g_quit = 1;
+	}
+}
+#endif
 
 #ifdef REI_LOG_ENABLED
 // Dev-loop watchdog: if frames make no progress for over 6s, or a stop request (host0:/rei_stop) goes unanswered for over 4s,
@@ -178,14 +193,15 @@ static int watchdog_thread(SceSize args, void *argp)
 	(void)args;
 	(void)argp;
 	int last = -1, still = 0, stop_wait = 0, init = 0;
-	while (!g_wd_done) {
+	for (;;) { // (whole app: g_wd_done = no game running — the game list, between games)
 		sceKernelDelayThread(1000000);
 		const int f = g_wd_frame, beat = g_wd_beat;
-		still = (f >= 0 && beat == last) ? still + 1 : 0;
-		init = f < 0 ? init + 1 : 0; // startup (ROM load, conversion, overclock) not finished
+		still = (f >= 0 && beat == last && !g_wd_done) ? still + 1 : 0;
+		init = f < 0 && !g_wd_done ? init + 1 : 0; // startup (ROM load, conversion, overclock) not finished
 		last = beat;
 		SceIoStat st;
-		stop_wait = sceIoGetstat("host0:/rei_stop", &st) >= 0 ? stop_wait + 1 : 0;
+		stop_wait = sceIoGetstat("host0:/rei_stop", &st) >= 0 && !g_wd_done ? stop_wait + 1 : 0;
+		select_poll();
 		if (sceIoGetstat("host0:/rei_quit", &st) >= 0) // same path as HOME "Quit game" (exit check)
 			g_quit = 1;
 		if (sceIoGetstat("host0:/rei_home", &st) >= 0) { // (diag) call the HOME > Quit game callback directly (goes to XMB when done)
@@ -263,7 +279,8 @@ static volatile int g_game_loop;    // after switching the ME (cleanup needed)
 static volatile int g_loop_left;    // left the game loop
 static volatile int g_home_exit;    // HOME exit: main cleans up but leaves the exit to the callback
 static volatile int g_cleanup_done; // main's cleanup is done
-static int g_other_stop;            // other-board path ended due to a dev-loop stop request
+static int g_list_stop;             // (dev loop) stop request while the game list was up
+enum { REI_RUN_DONE, REI_RUN_DEV_STOP }; // how run_m92 / run_other_board ended
 static int exit_callback(int arg1, int arg2, void *common)
 {
 	(void)arg1;
@@ -340,8 +357,6 @@ static void core_log(const char *msg)
 
 // App folder (where the EBOOT is, ends with '/'). ROMs go in roms/ below it (folder created at startup)
 static char g_app_dir[96] = "ms0:/PSP/GAME/REIREM/";
-static char g_eboot[112];   // path of this EBOOT (relaunched for Select game in the options screen)
-static volatile int g_relaunch;
 
 // The XMB game list shows folders with newer dates on top. Set the install folder date to 2099-01-01 so it shows first (if the PSP
 // clock was wrong at install, e.g. 2011, it ended up at the bottom). path is a folder path not ending in '/'
@@ -363,7 +378,6 @@ static void set_app_dir(int argc, char *argv[])
 {
 	if (argc > 0 && argv[0] && strchr(argv[0], '/')) {
 		snprintf(g_app_dir, sizeof(g_app_dir), "%s", argv[0]);
-		snprintf(g_eboot, sizeof(g_eboot), "%s", argv[0]);
 		strrchr(g_app_dir, '/')[1] = 0;
 	}
 	if (strncmp(g_app_dir, "host", 4) != 0) { // move install folder to top of XMB list
@@ -404,16 +418,19 @@ static const rei_game_found *choose_game(void)
 	for (int i = 0; i < nd; i++)
 		pdirs[i] = dirs[i];
 	static rei_game_found found[REI_GAMES_MAX];
-	int n = rei_games_scan(pdirs, nd, found, REI_GAMES_MAX, NULL);
-	// All boards run (M92 via GE/ME path, others via run_other_board). An M92-only build blocks games that are name entries only
+	static int n = -1; // (scanned once; again on Refresh ROM list in the list's options)
+	if (n < 0) {
+		n = rei_games_scan(pdirs, nd, found, REI_GAMES_MAX, NULL);
+		// All boards run (M92 via GE/ME path, others via run_other_board). An M92-only build blocks games that are name entries only
 #ifdef REI_M92_ONLY
-	for (int i = 0; i < n; i++)
-		found[i].supported = !strcmp(rei_core_game_board(found[i].game), "M92");
+		for (int i = 0; i < n; i++)
+			found[i].supported = !strcmp(rei_core_game_board(found[i].game), "M92");
 #endif
-	int present = 0;
-	for (int i = 0; i < n; i++)
-		present += found[i].present && found[i].supported;
-	REI_LOG("reirem: %d games, %d playable\n", n, present);
+		int present = 0;
+		for (int i = 0; i < n; i++)
+			present += found[i].present && found[i].supported;
+		REI_LOG("reirem: %d games, %d playable\n", n, present);
+	}
 	if (n <= 0)
 		return NULL;
 	if (g_settings.show_list) { // (options screen Select game flag — the list is always shown now, so just clear it)
@@ -457,13 +474,71 @@ static const rei_game_found *choose_game(void)
 				initial = i;
 	static char rom_dir[112];
 	snprintf(rom_dir, sizeof(rom_dir), "%sroms/", g_app_dir);
-	return &found[rei_game_select(found, n, initial, rom_dir)];
+	for (;;) {
+		const int k = rei_game_select(found, n, initial, rom_dir);
+		if (k >= 0)
+			return &found[k];
+		if (k == REI_LIST_STOP) {
+			g_list_stop = 1;
+			return NULL;
+		}
+		if (k == REI_LIST_QUIT)
+			return NULL; // (HOME exit: g_quit)
+		// REI_LIST_REFRESH: read the ROM folders again, the cursor stays on the same game
+		const int keep = rei_game_select_cursor();
+		const int was = keep >= 0 && keep < n ? found[keep].game : -1;
+		n = rei_games_scan(pdirs, nd, found, REI_GAMES_MAX, NULL);
+		initial = -1;
+		for (int i = 0; i < n; i++)
+			if (found[i].game == was)
+				initial = i;
+		REI_LOG("reirem: ROM list refreshed: %d games\n", n);
+	}
 }
 
-static void load_progress(int permille, void *user)
+static void load_progress(int permille, void *user) // (core progress, on the loader thread: the main thread draws)
 {
 	(void)user;
-	rei_loading_progress(permille);
+	rei_loading_set(permille);
+}
+
+// Core init on a loader thread while the main thread draws the loading screen every vblank (the core reads and unpacks the ROMs
+// for seconds; drawing from the progress callback stuttered). Same CPU, lower priority: the loader runs whenever main waits for
+// vblank. The core's per-CPU state needs nothing per thread on the PSP (nec_intf keys the main CPU by the stack, not the thread)
+typedef struct {
+	const rei_core_config *cfg;
+	volatile int done;
+	int rc;
+} load_job;
+static int load_thread(SceSize args, void *argp)
+{
+	load_job *j = *(load_job **)argp;
+	(void)args;
+	j->rc = rei_core_init(j->cfg);
+	j->done = 1;
+	return 0;
+}
+static int core_init_threaded(const rei_core_config *cfg)
+{
+	static load_job job;
+	load_job *pj = &job;
+	job.cfg = cfg;
+	job.done = 0;
+	job.rc = -1;
+	const SceUID t = sceKernelCreateThread("rei_load", load_thread, 0x30, 0x40000, THREAD_ATTR_USER | THREAD_ATTR_VFPU, NULL);
+	if (t < 0 || sceKernelStartThread(t, sizeof(pj), &pj) < 0) {
+		if (t >= 0)
+			sceKernelDeleteThread(t);
+		REI_LOG("reirem: loader thread failed %08x, loading on main\n", (unsigned)t);
+		return rei_core_init(cfg);
+	}
+	while (!job.done) {
+		rei_loading_frame();
+		sceDisplayWaitVblankStart();
+	}
+	sceKernelWaitThreadEnd(t, NULL);
+	sceKernelDeleteThread(t);
+	return job.rc;
 }
 
 static int on_me(void)
@@ -809,6 +884,19 @@ static int other_pop(int16_t *dst)
 	return 1;
 }
 
+// output gain (as the Vita version and ReSys12): doubled, with a soft limit above 75% of full scale instead of clipping — past the
+// knee the curve bends smoothly towards full scale (same slope at the knee). After the audio hash (frontend only)
+static inline int16_t out_gain(int32_t v)
+{
+	enum { KNEE = 24576, ROOM = 32767 - KNEE };
+	v *= 2;
+	const int32_t m = v < 0 ? -v : v;
+	if (m <= KNEE)
+		return (int16_t)v;
+	const int32_t e = m - KNEE, y = KNEE + e * ROOM / (e + ROOM);
+	return (int16_t)(v < 0 ? -y : y);
+}
+
 static int audio_thread(SceSize args, void *argp)
 {
 	(void)args;
@@ -867,8 +955,8 @@ static int audio_thread(SceSize args, void *argp)
 				int f = (int)(frac >> 4); // 12 bits
 				int l = fifo[head * 2] + (((fifo[n * 2] - fifo[head * 2]) * f) >> 12);
 				int r = fifo[head * 2 + 1] + (((fifo[n * 2 + 1] - fifo[head * 2 + 1]) * f) >> 12);
-				o[i * 2] = (int16_t)l;
-				o[i * 2 + 1] = (int16_t)r;
+				o[i * 2] = out_gain(l);
+				o[i * 2 + 1] = out_gain(r);
 				last_l = l;
 				last_r = r;
 				frac += step;
@@ -881,8 +969,8 @@ static int audio_thread(SceSize args, void *argp)
 			for (int i = 0; i < AUDIO_BLOCK; i++) { // underrun: ramp last sample to 0 (~5ms), then silence
 				last_l = last_l * 15 / 16;
 				last_r = last_r * 15 / 16;
-				o[i * 2] = (int16_t)last_l;
-				o[i * 2 + 1] = (int16_t)last_r;
+				o[i * 2] = out_gain(last_l);
+				o[i * 2 + 1] = out_gain(last_r);
 			}
 			g_audio_underruns++;
 		}
@@ -1021,6 +1109,34 @@ static void sleep_wait(void)
 	sceKernelDelayThread(500000); // (until the system has restored all drivers)
 	power_lock(1);
 }
+// Between games the ME stays halted in our code with the MeRpc pass-through, as after a quick load's stop: the next game restarts
+// it the same way (me_boot). Returning it to firmware at every switch and resetting it again soon after powered the device off
+// in the next game's ME start (play_check SWITCH 2026-10-28 01:50, app folder me_trace last "table file" right after "restore 0").
+// So the firmware reboot happens only when leaving the app, sleeping or unloading (me_release), and until then HOME and the power
+// switch are handled by main as during a game (g_game_loop, power lock; list_poll)
+static int g_me_ours; // the ME runs our (halted) code between games
+static void me_release(void)
+{
+#ifdef REI_PSP_ME
+	if (!g_me_ours)
+		return;
+	const int r = me_sound_prepare_exit();
+	REI_LOG("reirem: ME back to firmware %d\n", r);
+	(void)r;
+	g_me_ours = 0;
+#endif
+}
+static int list_poll(void) // (game list: every frame)
+{
+	if (g_sleep_req) { // power switch: the ME back to firmware first (it loses power), then sleep as the system wants
+		me_release();
+		sleep_wait();
+		power_lock(0);
+		g_game_loop = 0;
+	}
+	return g_quit; // (HOME exit: main cleans up and the callback exits)
+}
+
 static void sleep_state_path(char *buf, int len)
 {
 	snprintf(buf, len, "%s%s_sleep.sav", rei_settings_dir(), rei_core_set_name());
@@ -1322,8 +1438,55 @@ static int drc35_to_me(void)
 #endif
 #endif
 
+// Per-game state back to what a fresh process has (in-app game switching: the previous game, maybe of another board, set these)
+static void game_state_reset(void)
+{
+	g_submitted = 0;
+	g_overflow_logged = 0;
+	g_tiles_acc = g_tiles_max = 0;
+#if REI_PSP_DEFER
+	g_cur_frame = g_rendered = g_render_open = g_sub_stage = 0;
+	g_ge_sprites = 0;
+#endif
+	g_af_offset = 0;
+	g_save_at = -1;
+	g_xverify_from = g_xverify_to = -1;
+	g_xverify_bad = 0;
+#ifdef REI_PSP_ME
+	g_audio_quit = 0;
+	g_audio_hash = FNV_OFFSET;
+	g_audio_hashed = g_audio_underruns = 0;
+	g_audio_hold = g_audio_held = 0;
+	g_other = 0;
+	g_mix = 0;
+	g_ym_me_on = 0;
+	g_ym_split = 0;
+	g_me_render_on = 0;
+	g_or_w = g_or_r = 0;
+	{ // (other boards set these for drawing on the ME; M92 and main-drawn games run without them)
+		extern int rei_render_noalloc;
+		extern void (*rei_render_done_hook)(void), (*rei_defer_flush_hook)(void), (*rei_sound_line_hook)(void);
+		rei_render_noalloc = 0;
+		rei_render_done_hook = NULL;
+		rei_defer_flush_hook = NULL;
+		rei_sound_line_hook = NULL;
+	}
+#endif
+	{
+		extern int rei_v25_counter_rule; // (M92 turns it off for the ME's V35)
+		rei_v25_counter_rule = 1;
+	}
+}
+
+static void m92_state_reset(void)
+{
+	game_state_reset();
+	g_audio_rate = AUDIO_RATE;
+}
+
 static int run_other_board(const rei_game_found *game, const char *set_name)
 {
+	game_state_reset();
 	g_other = 1;
 	rei_core_config cfg;
 	memset(&cfg, 0, sizeof(cfg));
@@ -1637,10 +1800,11 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 #ifdef REI_PSP_ME
 	me_sound_trace("core init", 0);
 #endif
-	if (rei_core_init(&cfg) != 0) {
+	if (core_init_threaded(&cfg) != 0) {
 		REI_LOG("reirem: init failed: %s\n", rei_core_error());
 		rei_message_screen("Init failed", rei_core_error());
-		return 0;
+		g_to_list = 1; // (the core cleaned up after itself: back to the list)
+		return REI_RUN_DONE;
 	}
 	int w, h, flags;
 	rei_core_screen(&w, &h, &flags);
@@ -1665,8 +1829,12 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 	REI_LOG("reirem: other: fb %p audio %p alen %d\n", (void *)fb, (void *)audio, alen);
 	if (!fbs[0] || !fbs[1] || !audio || alen > 1024) {
 		rei_message_screen("Init failed", "Out of memory");
+		free(fbs[0]);
+		free(fbs[1]);
+		free(audio);
 		rei_core_exit();
-		return 0;
+		g_to_list = 1;
+		return REI_RUN_DONE;
 	}
 	memset(fbs[0], 0, (size_t)stride * h * 2);
 	memset(fbs[1], 0, (size_t)stride * h * 2);
@@ -1952,7 +2120,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 #ifdef REI_PSP_ME
 	if (g_mix && !g_me_render_on) { // (mode 3 failed to start: the threaded core stalls main waiting without a sound side — back to list)
 		rei_message_screen("Sound on ME failed", "Remove m107mesnd from the app folder");
-		g_relaunch = 1;
+		g_to_list = 1;
 		g_quit = 1;
 	}
 #ifdef REI_LOG_ENABLED
@@ -1979,10 +2147,15 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 	int vc_started = 0, fps_n = 0;
 	uint64_t fps_t0 = now_us(), acc_emu = 0, max_emu = 0;
 	uint64_t acc_pres = 0, acc_vbw = 0, acc_iter = 0, max_iter = 0, acc_gesync = 0, t_iter = now_us();
+#ifdef REI_PSP_ME
+	int ym_over = 0, ym_main_over = 0, ym_cool = 0; // (YM2151-on-ME overflow decisions of this game)
+#endif
 #ifdef REI_LOG_ENABLED
 	g_pad_n = 0;
 	pad_script_load();
 #endif
+	g_playing = 1;
+	g_loop_left = 0;
 	for (int f = 0; !g_quit; f++) {
 #ifdef REI_LOG_ENABLED
 		g_wd_frame = f; // (dev-loop watchdog thread: progress check)
@@ -2003,6 +2176,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 			pad.Buttons = pad_script(g_wd_beat);
 			pad.Lx = pad.Ly = 128;
 		}
+		pad.Buttons |= rei_test_press();
 #endif
 		const uint32_t btn = pad.Buttons & (PSP_CTRL_UP | PSP_CTRL_DOWN | PSP_CTRL_LEFT | PSP_CTRL_RIGHT | PSP_CTRL_SQUARE |
 			PSP_CTRL_CROSS | PSP_CTRL_CIRCLE | PSP_CTRL_TRIANGLE | PSP_CTRL_START | PSP_CTRL_SELECT | PSP_CTRL_LTRIGGER |
@@ -2056,10 +2230,8 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 			const rei_menu_result r = rei_menu_update(mb);
 			if (r == REI_MENU_EXIT)
 				g_quit = 1;
-			if (r == REI_MENU_SELECT_GAME) {
-				g_settings.show_list = 1;
-				rei_settings_save();
-				g_relaunch = 1;
+			if (r == REI_MENU_SELECT_GAME) { // back to the game list in this process (teardown below)
+				g_to_list = 1;
 				g_quit = 1;
 			}
 			if (r == REI_MENU_RESET)
@@ -2382,7 +2554,6 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 				// (riskchal: ME drawing alone is heavy; with YM too it is 24ms, 21ms with main synthesis)
 				extern unsigned long long rei_defer_wait_us;
 				static unsigned long long ym_lw;
-				static int ym_over;
 				const unsigned long long w = rei_defer_wait_us - ym_lw;
 				ym_lw = rei_defer_wait_us;
 				static int ym_keep = -1; // (diag) host0:/rei_ymkeep: never move YM2151 back to main even if the ME is busy
@@ -2434,7 +2605,6 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 					// (YM synthesis on main costs 4~5ms: when moving everything, keeping it on the ME is better if the wait is less. A split moves only part, so 1.5ms)
 					// If main overflows while split (main work alone over 16ms without waiting — misses vblank, 3s in a row), reduce main's share one step — raised in heavy scenes, but
 					// some games are main-bound in play (dsoccr94). For 20s after reducing, raising again needs 5s of continuous overflow (prevents flip-flopping)
-					static int ym_main_over, ym_cool;
 					const int cur = rei_core_ym_me_split_mask();
 					const unsigned long long own = acc_emu > w + yw ? acc_emu - w - yw : 0;
 					ym_over = w + yw > 60 * (ym_split ? 1500 : 4000) ? ym_over + 1 : 0;
@@ -2643,192 +2813,37 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 	}
 #endif
 	video_set_game_buffer(NULL, 0, 0, 0, 0);
-	video_shutdown();
+	g_playing = 0;
 	REI_LOG("reirem: exit: video down\n");
 	rei_core_exit();
 	REI_LOG("reirem: exit: core down\n");
 #ifdef REI_PSP_ME
-	if (g_me_render_on) { // restore the MeRpc handler and return the ME to firmware (same as M92 path)
-		const int r = me_sound_prepare_exit();
-		REI_LOG("reirem: exit: ME back to firmware %d\n", r);
-		(void)r;
+	if (g_me_render_on) { // (halted in our loop: back to firmware only when leaving the app, as in the M92 path — me_release)
+		g_me_ours = 1;
 		g_me_render_on = 0;
 	}
 #endif
 	if (gem) {
 		rei_m107_set_ge(NULL, 0);
 		rei_m72_set_ge(NULL, 0);
-		video_layers_free();
 	}
+	video_layers_free();
 	for (int i = 0; i < 3; i++) {
 		free(mfb[i]);
 		free(mclut[i]);
 	}
+	free(fbs[0]);
+	free(fbs[1]);
+	free(audio);
 	REI_LOG("reirem: exit: other board down, dev_stop %d (%u ms)\n", dev_stop, (unsigned)((now_us() - t_left) / 1000));
-	return dev_stop;
+	return dev_stop ? REI_RUN_DEV_STOP : REI_RUN_DONE;
 }
 
-#if defined(REI_PSP_TESTGAME) && !defined(REI_LOG_ENABLED)
-static int exit_callback(int arg1, int arg2, void *common);
-static int testhome_thread(SceSize args, void *argp)
+// M92 path: the game with sound on the ME (core init to teardown). REI_RUN_* (main loop: back to the list, exit, dev stop)
+static int run_m92(const rei_game_found *game, const char *set_name)
 {
-	(void)args;
-	(void)argp;
-	for (;;) {
-		sceKernelDelayThread(1000000);
-		SceIoStat st;
-		if (sceIoGetstat("host0:/rei_home", &st) >= 0) {
-			sceIoRemove("host0:/rei_home");
-			exit_callback(0, 0, NULL);
-			return 0;
-		}
-		if (sceIoGetstat("host0:/rei_select", &st) >= 0) { // same path as options screen Select game (exit and relaunch the EBOOT)
-			sceIoRemove("host0:/rei_select");
-			g_relaunch = 1;
-			g_quit = 1;
-			return 0;
-		}
-	}
-}
-#endif
-int main(int argc, char *argv[])
-{
-	set_app_dir(argc, argv);
-#ifdef REI_PSP_ME
-	me_trace_set_dir(g_app_dir); // (play builds: startup stages to app folder me_trace.txt)
-	me_sound_trace("app start", 0);
-#endif
-	g_main_thid = sceKernelGetThreadId();
-#ifdef REI_DRC
-	rei_drc_cache_flush = drc_cache_flush; // (all boards: flush generated code from D cache and invalidate I cache. M107 hung without it)
-	{ // clock for spare-time compiling (drc_idle_work)
-		extern unsigned (*rei_drc_now_us)(void);
-		rei_drc_now_us = (unsigned (*)(void))sceKernelGetSystemTimeLow;
-		drc35_main_hooks(); // (V35 instances use the same function — switched for the ME in mode 3)
-	}
-#ifdef REI_LOG_ENABLED
-	{ // (diag) dynarec compile time µs (slow frame log)
-		extern unsigned (*rei_drc_clock32)(void), (*rei_drc35_clock32)(void);
-		rei_drc_clock32 = (unsigned (*)(void))sceKernelGetSystemTimeLow;
-		rei_drc35_clock32 = rei_drc_clock32;
-		// Per-instruction stage times only with host0:/rei_drcfine (clock reads inflated compile time by ~4µs per instruction)
-		extern unsigned (*rei_drc_clock_fine)(void);
-		SceIoStat st;
-		if (sceIoGetstat("host0:/rei_drcfine", &st) >= 0)
-			rei_drc_clock_fine = (unsigned (*)(void))sceKernelGetSystemTimeLow;
-		// M107 main/sound line times (d_m107.cpp, ~34 clock reads per frame); in-block V33 time only with host0:/rei_blkclk
-		// (twice per dispatch — ~800 per frame)
-		extern unsigned (*rei_m107_clock)(void), (*rei_drc_blk_clock)(void);
-		rei_m107_clock = (unsigned (*)(void))sceKernelGetSystemTimeLow;
-		const int blk = sceIoGetstat("host0:/rei_blkclk", &st) >= 0;
-		extern int rei_drc_interp_stat; // (diag) dispatcher interpretation reasons (nec_drc_ops.inc drc_interp_note)
-		if (sceIoGetstat("host0:/rei_interpstat", &st) >= 0)
-			rei_drc_interp_stat = 1;
-		if (blk)
-			rei_drc_blk_clock = (unsigned (*)(void))sceKernelGetSystemTimeLow;
-#if defined(REI_HWPROF) && !defined(REI_PROFILE)
-		// (REI_HWPROF builds) hardware counter value in place of compile "µs" (13 i_miss: is the compiler outside the I cache). M107 spans and in-block use the same event count
-		rei_drc_clock32 = drc_hw_counter32;
-		rei_m107_clock = drc_hw_counter32;
-		if (blk)
-			rei_drc_blk_clock = drc_hw_counter32;
-#endif
-	}
-#endif
-#endif
-	SceUID th = sceKernelCreateThread("callbacks", callback_thread, 0x11, 0xFA0, 0, NULL);
-	if (th >= 0)
-		sceKernelStartThread(th, 0, NULL);
-#if defined(REI_PSP_TESTGAME) && !defined(REI_LOG_ENABLED)
-	{ // (test builds) HOME exit check for no-log builds: when host0:/rei_home appears, run the same callback as HOME > Quit game
-		const SceUID th = sceKernelCreateThread("testhome", testhome_thread, 0x0c, 0x1000, 0, NULL);
-		if (th >= 0)
-			sceKernelStartThread(th, 0, NULL);
-	}
-#endif
-#ifdef REI_LOG_ENABLED
-	{ // dev-loop watchdog (from startup)
-		g_wd_thread = sceKernelCreateThread("watchdog", watchdog_thread, 0x0c, 0x1000, 0, NULL);
-		if (g_wd_thread >= 0)
-			sceKernelStartThread(g_wd_thread, 0, NULL);
-	}
-#endif
-	sceCtrlSetSamplingCycle(0);
-	sceCtrlSetSamplingMode(PSP_CTRL_MODE_ANALOG);
-	// Max CPU/bus clock (333MHz per psp/docs/RULES.md ch.1). Left alone if CFW already set it higher (ARK overclock)
-	// (if another plugin lowers it mid-game, the main loop below raises it again)
-	if (scePowerGetCpuClockFrequency() < 333 || scePowerGetBusClockFrequency() < 166)
-		scePowerSetClockFrequency(333, 333, 166);
-	REI_LOG("reirem: start, cpu %d MHz bus %d MHz\n", scePowerGetCpuClockFrequency(), scePowerGetBusClockFrequency());
-
-	// Settings and save states go in the app folder (PSPLink dev loop: ROM folder host1:)
-	rei_settings_set_dir(strncmp(g_app_dir, "host", 4) == 0 ? "host1:/" : g_app_dir);
-#ifdef REI_PSP_ME
-	// ME reset vector copy mevec.bin (plus MeRpc address merpc.bin, image type metab.bin): read from hardware (0xbfc00000) only the first time,
-	// then from file. Play builds too (2026-10-16): the device powered off on the hardware read at game start (play_check kengo/vigilant,
-	// last me_trace entry "table file" = vector read in me_kernel_start_table, recurrence log 8 "start side"). The dev loop has used the same
-	// copy since 2026-10-12 for 1,408 start/exit cycles (contents identical every boot). The reason it was disabled for play builds on 2026-10-12 (XMB return hang) was
-	// later found to be recurrence log 7 (call inside a trace macro vanished). Disable: app folder nomevec
-	if (strncmp(g_app_dir, "host", 4) == 0)
-		me_sound_set_dir("host1:/");
-	else {
-		SceIoStat vst;
-		char vp[160];
-		snprintf(vp, sizeof(vp), "%snomevec", g_app_dir);
-		if (sceIoGetstat(vp, &vst) < 0)
-			me_sound_set_dir(g_app_dir);
-	}
-	{ // (off by default) pause the CWCheat thread during play — app folder cwstop (me_sound.c; off because a kernel call once powered off the device)
-		extern int me_sound_cw_stop;
-		SceIoStat cst;
-		char cp[160];
-		snprintf(cp, sizeof(cp), "%scwstop", strncmp(g_app_dir, "host", 4) == 0 ? "host0:/rei_" : g_app_dir);
-		me_sound_cw_stop = sceIoGetstat(cp, &cst) >= 0;
-	}
-#endif
-	rei_settings_load();
-	// Bring up the display first (game list, notice screen). Tile graphics bundle after the game is chosen (video_layers_init)
-	REI_LOG("reirem: video_init\n");
-	video_init();
-	video_set_overlay(rei_menu_overlay);
-
-	const rei_game_found *game = choose_game();
-#ifdef REI_PSP_ME
-	me_sound_trace(game ? rei_core_game_set(game->game) : "no game", 0);
-#endif
-	if (!game) {
-		static char body[640];
-		int len = snprintf(body, sizeof(body), "Put ROM zip files in\n  %sroms/\n\nSupported sets:\n  ", g_app_dir);
-		for (int i = 0; i < rei_core_game_count() && len < (int)sizeof(body) - 24; i++)
-			len += snprintf(body + len, sizeof(body) - len, "%s.zip%s", rei_core_game_set(i), (i % 4 == 3) ? "\n  " : "  ");
-		snprintf(body + len, sizeof(body) - len, "\n\nClone sets (nbbatmanu, hooku, ...) may be split:\nmissing files are read from the parent zip.");
-		REI_LOG("reirem: rom not found\n");
-		rei_message_screen("ROM not found", body);
-		sceKernelExitGame();
-		return 0;
-	}
-	const char *set_name = rei_core_game_set(game->game);
-	REI_LOG("reirem: rom %s (set %s, parent %s)\n", game->zip, set_name, game->parent);
-	{ // diag: heap (newlib used size/free space, memory left in the system)
-		const struct mallinfo mi = mallinfo();
-		REI_LOG("reirem: heap arena %u KB used %u KB free %u KB, system free %u KB max block %u KB\n", (unsigned)(mi.arena / 1024),
-			(unsigned)(mi.uordblks / 1024), (unsigned)(mi.fordblks / 1024), (unsigned)(sceKernelTotalFreeMemSize() / 1024),
-			(unsigned)(sceKernelMaxFreeMemSize() / 1024));
-	}
-	rei_settings_load_game(set_name);
-	rei_settings_save(); // remember last game
-	rei_loading_title(rei_core_game_title(game->game));
-	rei_loading_progress(0);
-	// Off-screen artwork (user artwork/<set>.png, parent set if missing)
-	video_load_art(g_app_dir, set_name, rei_core_game_parent(game->game));
-	// (read by exit_tail: other boards goto past the M92 declarations below, so zero it here — an uninitialized value sent HOME exit
-	//  down the dev-stop path (unload module only) and the callback waited on cleanup forever, device 2026-10-13)
 	int dev_stop = 0;
-	if (strcmp(rei_core_game_board(game->game), "M92") != 0) { // other boards: on main without the ME (run_other_board)
-		g_other_stop = run_other_board(game, set_name);
-		goto exit_tail;
-	}
-
+	m92_state_reset();
 	rei_core_config cfg;
 	memset(&cfg, 0, sizeof(cfg));
 	cfg.zip_path = game->zip;
@@ -2884,11 +2899,11 @@ int main(int argc, char *argv[])
 #ifdef REI_PSP_ME
 	me_sound_trace("core init", 0);
 #endif
-	if (rei_core_init(&cfg) != 0) {
+	if (core_init_threaded(&cfg) != 0) {
 		REI_LOG("reirem: init failed: %s\n", rei_core_error());
 		rei_message_screen("Init failed", rei_core_error());
-		sceKernelExitGame();
-		return 0;
+		g_to_list = 1; // (the core cleaned up after itself: back to the list)
+		return REI_RUN_DONE;
 	}
 	REI_LOG("reirem: init %s in %u ms, free %u KB, max block %u KB\n", rei_core_game_name(),
 		(unsigned)((now_us() - t0) / 1000), (unsigned)(sceKernelTotalFreeMemSize() / 1024),
@@ -2980,8 +2995,13 @@ int main(int argc, char *argv[])
 		t0 = now_us();
 		if (ge_layers_init(&ti) != 0 || video_layers_init(&ti) != 0) {
 			REI_LOG("reirem: G2 init failed (memory)\n");
-			sceKernelExitGame();
-			return 0;
+			video_layers_free();
+			free(rgb);
+			free(audio);
+			rei_core_exit();
+			rei_message_screen("Init failed", "Out of memory");
+			g_to_list = 1;
+			return REI_RUN_DONE;
 		}
 		rei_loading_progress(960);
 		REI_LOG("reirem: tile atlas %d tiles in %u ms, free %u KB, heap free %u KB\n", ti.tile_mask + 1,
@@ -2992,7 +3012,7 @@ int main(int argc, char *argv[])
 			g_addr_tiles = (unsigned)(uintptr_t)ti.tiles;
 			g_addr_atlas = (unsigned)(uintptr_t)video_atlas_addr();
 			g_addr_heap = (unsigned)(uintptr_t)probe;
-			g_addr_code = (unsigned)(uintptr_t)&main;
+			g_addr_code = (unsigned)(uintptr_t)&run_m92;
 			free(probe);
 		}
 	}
@@ -3113,6 +3133,17 @@ int main(int argc, char *argv[])
 	uint64_t t_loop = now_us();
 	g_game_loop = 1; // (ME builds already set this right before ME start)
 	power_lock(1);
+	// (input mode, menu and pacing state of this game: plain locals so the next game in the process starts fresh)
+#if defined(REI_PSP_PLAYER) || !defined(REI_LOG_ENABLED)
+	int g_manual = 1;
+#else
+	int g_manual = 0;
+#endif
+	int menu_open = 0, vc_started = 0, hud_n = 0;
+	uint32_t prev = 0, vc_target = 0;
+	uint64_t hud_acc = 0;
+	g_playing = 1;
+	g_loop_left = 0;
 	for (int f = 0; !g_quit; f++) {
 #ifdef REI_LOG_ENABLED
 		g_wd_frame = f;
@@ -3137,13 +3168,8 @@ int main(int argc, char *argv[])
 		sceCtrlPeekBufferPositive(&pad, 1);
 		// Input: log builds autoplay while no button is pressed (same deterministic input as harness --autoplay, for measurement/verification),
 		// and switch to the real pad after any press. Play builds use the pad from the start. Exit via HOME or options screen Exit
-#if defined(REI_PSP_PLAYER) || !defined(REI_LOG_ENABLED)
-		static int g_manual = 1;
-#else
-		static int g_manual;
-#endif
 #ifdef REI_LOG_ENABLED
-		pad.Buttons |= pad_script(g_wd_beat);
+		pad.Buttons |= pad_script(g_wd_beat) | rei_test_press();
 #endif
 		const uint32_t btn = pad.Buttons & (PSP_CTRL_UP | PSP_CTRL_DOWN | PSP_CTRL_LEFT | PSP_CTRL_RIGHT | PSP_CTRL_SQUARE |
 			PSP_CTRL_CROSS | PSP_CTRL_CIRCLE | PSP_CTRL_TRIANGLE | PSP_CTRL_START | PSP_CTRL_SELECT | PSP_CTRL_LTRIGGER |
@@ -3165,7 +3191,6 @@ int main(int argc, char *argv[])
 				sleep_m92();
 			}
 			// Options screen (SELECT+START): the game pauses while open and the menu is drawn over the last frame
-			static int menu_open;
 			if (!menu_open && rei_menu_should_open(mb)) {
 				menu_open = 1;
 				finish_frames(f);
@@ -3175,11 +3200,8 @@ int main(int argc, char *argv[])
 				const rei_menu_result r = rei_menu_update(mb);
 				if (r == REI_MENU_EXIT)
 					g_quit = 1;
-				if (r == REI_MENU_SELECT_GAME) {
-					// To game list: show the list on next start, leave via the exit path and relaunch the EBOOT
-					g_settings.show_list = 1;
-					rei_settings_save();
-					g_relaunch = 1;
+				if (r == REI_MENU_SELECT_GAME) { // back to the game list in this process (teardown below)
+					g_to_list = 1;
 					g_quit = 1;
 				}
 				if (r == REI_MENU_RESET)
@@ -3199,7 +3221,6 @@ int main(int argc, char *argv[])
 				continue;
 			}
 			// Quick save SELECT+L, quick load SELECT+R (once on press)
-			static uint32_t prev;
 			const uint32_t qs = PSP_CTRL_SELECT | PSP_CTRL_LTRIGGER, ql = PSP_CTRL_SELECT | PSP_CTRL_RTRIGGER;
 			if ((mb & qs) == qs && (prev & qs) != qs) {
 				finish_frames(f);
@@ -3361,8 +3382,6 @@ int main(int argc, char *argv[])
 		  // wait until that vblank (sceGuSwapBuffers flips on the next vblank). If late, don't wait and move to the next frame
 		  // to catch up; if more than two frames behind, reset the slot. (Before: a 16.683ms timer — drifted slightly from the display period
 		  // and occasionally showed a frame twice or skipped one)
-			static uint32_t vc_target;
-			static int vc_started;
 			acc_work += now_us() - t_loop;
 			const uint32_t vc = (uint32_t)sceDisplayGetVcount();
 			if (!vc_started || (int32_t)(vc - vc_target) > 2) {
@@ -3380,8 +3399,6 @@ int main(int argc, char *argv[])
 		if (dt > max_loop)
 			max_loop = dt;
 		{ // screen HUD: 30-frame average frame time and FPS, frame number (left screen margin, to pin slow scenes to frames)
-			static uint64_t hud_acc;
-			static int hud_n;
 			hud_acc += dt;
 			if (++hud_n == 30) {
 				unsigned us = (unsigned)(hud_acc / 30);
@@ -3573,23 +3590,230 @@ int main(int argc, char *argv[])
 	}
 #endif
 	REI_LOG("reirem: exit: audio stopped\n");
-	video_shutdown();
+	g_playing = 0;
+#ifndef REI_PSP_G1
+	video_layers_free(); // (the GE is idle: nothing reads the tile atlas any more)
+#endif
 	REI_LOG("reirem: exit: video down\n");
 	rei_core_exit();
 	REI_LOG("reirem: exit: core down, dev_stop %d\n", dev_stop);
 #ifdef REI_PSP_ME
-	{
-		// Restore the MeRpc handler and reboot the ME to firmware (dev-loop stop too: the handler must not point at module code being unloaded)
-		const int r = me_sound_prepare_exit();
-		REI_LOG("reirem: exit: ME back to firmware %d\n", r);
-		(void)r;
+	g_me_ours = 1; // (halted in our loop: back to firmware only when leaving the app — me_release)
+#endif
+	free(rgb);
+	free(audio);
+	return dev_stop ? REI_RUN_DEV_STOP : REI_RUN_DONE;
+}
+
+#if defined(REI_PSP_TESTGAME) && !defined(REI_LOG_ENABLED)
+static int exit_callback(int arg1, int arg2, void *common);
+static int testhome_thread(SceSize args, void *argp)
+{
+	(void)args;
+	(void)argp;
+	for (;;) {
+		sceKernelDelayThread(1000000);
+		SceIoStat st;
+		if (sceIoGetstat("host0:/rei_home", &st) >= 0) {
+			sceIoRemove("host0:/rei_home");
+			exit_callback(0, 0, NULL);
+			return 0;
+		}
+		select_poll();
+	}
+}
+#endif
+int main(int argc, char *argv[])
+{
+	set_app_dir(argc, argv);
+#ifdef REI_PSP_ME
+	me_trace_set_dir(g_app_dir); // (play builds: startup stages to app folder me_trace.txt)
+	me_sound_trace("app start", 0);
+#endif
+	g_main_thid = sceKernelGetThreadId();
+#ifdef REI_DRC
+	rei_drc_cache_flush = drc_cache_flush; // (all boards: flush generated code from D cache and invalidate I cache. M107 hung without it)
+	{ // clock for spare-time compiling (drc_idle_work)
+		extern unsigned (*rei_drc_now_us)(void);
+		rei_drc_now_us = (unsigned (*)(void))sceKernelGetSystemTimeLow;
+		drc35_main_hooks(); // (V35 instances use the same function — switched for the ME in mode 3)
+	}
+#ifdef REI_LOG_ENABLED
+	{ // (diag) dynarec compile time µs (slow frame log)
+		extern unsigned (*rei_drc_clock32)(void), (*rei_drc35_clock32)(void);
+		rei_drc_clock32 = (unsigned (*)(void))sceKernelGetSystemTimeLow;
+		rei_drc35_clock32 = rei_drc_clock32;
+		// Per-instruction stage times only with host0:/rei_drcfine (clock reads inflated compile time by ~4µs per instruction)
+		extern unsigned (*rei_drc_clock_fine)(void);
+		SceIoStat st;
+		if (sceIoGetstat("host0:/rei_drcfine", &st) >= 0)
+			rei_drc_clock_fine = (unsigned (*)(void))sceKernelGetSystemTimeLow;
+		// M107 main/sound line times (d_m107.cpp, ~34 clock reads per frame); in-block V33 time only with host0:/rei_blkclk
+		// (twice per dispatch — ~800 per frame)
+		extern unsigned (*rei_m107_clock)(void), (*rei_drc_blk_clock)(void);
+		rei_m107_clock = (unsigned (*)(void))sceKernelGetSystemTimeLow;
+		const int blk = sceIoGetstat("host0:/rei_blkclk", &st) >= 0;
+		extern int rei_drc_interp_stat; // (diag) dispatcher interpretation reasons (nec_drc_ops.inc drc_interp_note)
+		if (sceIoGetstat("host0:/rei_interpstat", &st) >= 0)
+			rei_drc_interp_stat = 1;
+		if (blk)
+			rei_drc_blk_clock = (unsigned (*)(void))sceKernelGetSystemTimeLow;
+#if defined(REI_HWPROF) && !defined(REI_PROFILE)
+		// (REI_HWPROF builds) hardware counter value in place of compile "µs" (13 i_miss: is the compiler outside the I cache). M107 spans and in-block use the same event count
+		rei_drc_clock32 = drc_hw_counter32;
+		rei_m107_clock = drc_hw_counter32;
+		if (blk)
+			rei_drc_blk_clock = drc_hw_counter32;
+#endif
 	}
 #endif
-exit_tail:
-	if (dev_stop || g_other_stop) {
+#endif
+	SceUID th = sceKernelCreateThread("callbacks", callback_thread, 0x11, 0xFA0, 0, NULL);
+	if (th >= 0)
+		sceKernelStartThread(th, 0, NULL);
+#if defined(REI_PSP_TESTGAME) && !defined(REI_LOG_ENABLED)
+	{ // (test builds) HOME exit check for no-log builds: when host0:/rei_home appears, run the same callback as HOME > Quit game
+		const SceUID th = sceKernelCreateThread("testhome", testhome_thread, 0x0c, 0x1000, 0, NULL);
+		if (th >= 0)
+			sceKernelStartThread(th, 0, NULL);
+	}
+#endif
+#ifdef REI_LOG_ENABLED
+	{ // dev-loop watchdog (from startup)
+		g_wd_thread = sceKernelCreateThread("watchdog", watchdog_thread, 0x0c, 0x1000, 0, NULL);
+		if (g_wd_thread >= 0)
+			sceKernelStartThread(g_wd_thread, 0, NULL);
+	}
+#endif
+	sceCtrlSetSamplingCycle(0);
+	sceCtrlSetSamplingMode(PSP_CTRL_MODE_ANALOG);
+	// Max CPU/bus clock (333MHz per psp/docs/RULES.md ch.1). Left alone if CFW already set it higher (ARK overclock)
+	// (if another plugin lowers it mid-game, the main loop below raises it again)
+	if (scePowerGetCpuClockFrequency() < 333 || scePowerGetBusClockFrequency() < 166)
+		scePowerSetClockFrequency(333, 333, 166);
+	REI_LOG("reirem: start, cpu %d MHz bus %d MHz\n", scePowerGetCpuClockFrequency(), scePowerGetBusClockFrequency());
+
+	// Settings and save states go in the app folder (PSPLink dev loop: ROM folder host1:)
+	rei_settings_set_dir(strncmp(g_app_dir, "host", 4) == 0 ? "host1:/" : g_app_dir);
+#ifdef REI_PSP_ME
+	// ME reset vector copy mevec.bin (plus MeRpc address merpc.bin, image type metab.bin): read from hardware (0xbfc00000) only the first time,
+	// then from file. Play builds too (2026-10-16): the device powered off on the hardware read at game start (play_check kengo/vigilant,
+	// last me_trace entry "table file" = vector read in me_kernel_start_table, recurrence log 8 "start side"). The dev loop has used the same
+	// copy since 2026-10-12 for 1,408 start/exit cycles (contents identical every boot). The reason it was disabled for play builds on 2026-10-12 (XMB return hang) was
+	// later found to be recurrence log 7 (call inside a trace macro vanished). Disable: app folder nomevec
+	if (strncmp(g_app_dir, "host", 4) == 0)
+		me_sound_set_dir("host1:/");
+	else {
+		SceIoStat vst;
+		char vp[160];
+		snprintf(vp, sizeof(vp), "%snomevec", g_app_dir);
+		if (sceIoGetstat(vp, &vst) < 0)
+			me_sound_set_dir(g_app_dir);
+	}
+	{ // (off by default) pause the CWCheat thread during play — app folder cwstop (me_sound.c; off because a kernel call once powered off the device)
+		extern int me_sound_cw_stop;
+		SceIoStat cst;
+		char cp[160];
+		snprintf(cp, sizeof(cp), "%scwstop", strncmp(g_app_dir, "host", 4) == 0 ? "host0:/rei_" : g_app_dir);
+		me_sound_cw_stop = sceIoGetstat(cp, &cst) >= 0;
+	}
+#endif
+	rei_settings_load();
+	// Bring up the display first (game list, notice screen). Tile graphics bundle after the game is chosen (video_layers_init)
+	REI_LOG("reirem: video_init\n");
+	video_init();
+	ui_init(); // (system font for the menus)
+	rei_game_select_set_poll(list_poll);
+	video_set_overlay(rei_menu_overlay);
+
+	// Game list -> game -> back to the list in the same process (Select game in the options), until exit (HOME, Exit, dev stop)
+	int run = REI_RUN_DONE;
+	for (int games = 0;; games++) {
+		g_quit = g_home_exit; // (a HOME exit that came during the switch stays)
+		g_to_list = 0;
+		g_loop_left = 1; // (not in a frame loop: the HOME callback must not release main's waits)
+#ifdef REI_LOG_ENABLED
+		g_wd_frame = -1;
+		g_wd_done = 1; // (the watchdog leaves the list alone)
+		{
+			const struct mallinfo mi = mallinfo();
+			REI_LOG("reirem: list %d: system free %u KB max block %u KB, heap used %u KB\n", games, (unsigned)(sceKernelTotalFreeMemSize() / 1024),
+				(unsigned)(sceKernelMaxFreeMemSize() / 1024), (unsigned)(mi.uordblks / 1024));
+		}
+#endif
+#if defined(REI_PSP_TESTGAME) && !defined(REI_LOG_ENABLED)
+		{ // (test builds) free memory at each return to the list, appended to host0:/rei_mem.txt (play_check SWITCH: must stay the same)
+			const struct mallinfo mi = mallinfo();
+			char line[96];
+			const int len = snprintf(line, sizeof(line), "list %d free %u KB max %u KB heap used %u KB\n", games,
+				(unsigned)(sceKernelTotalFreeMemSize() / 1024), (unsigned)(sceKernelMaxFreeMemSize() / 1024), (unsigned)(mi.uordblks / 1024));
+			const SceUID fd = sceIoOpen("host0:/rei_mem.txt", PSP_O_WRONLY | PSP_O_CREAT | (games ? PSP_O_APPEND : PSP_O_TRUNC), 0777);
+			if (fd >= 0) {
+				sceIoWrite(fd, line, len);
+				sceIoClose(fd);
+			}
+		}
+#endif
+		const rei_game_found *game = choose_game();
+#ifdef REI_PSP_ME
+		me_sound_trace(game ? rei_core_game_set(game->game) : "no game", 0);
+#endif
+		if (!game && g_list_stop) { // (dev loop: stop request while in the list)
+			run = REI_RUN_DEV_STOP;
+			break;
+		}
+		if (!game && g_quit) // (HOME exit while the list is up)
+			break;
+		if (!game) {
+			static char body[640];
+			int len = snprintf(body, sizeof(body), "Put ROM zip files in\n  %sroms/\n\nSupported sets:\n  ", g_app_dir);
+			for (int i = 0; i < rei_core_game_count() && len < (int)sizeof(body) - 24; i++)
+				len += snprintf(body + len, sizeof(body) - len, "%s.zip%s", rei_core_game_set(i), (i % 4 == 3) ? "\n  " : "  ");
+			snprintf(body + len, sizeof(body) - len, "\n\nClone sets (nbbatmanu, hooku, ...) may be split:\nmissing files are read from the parent zip.");
+			REI_LOG("reirem: rom not found\n");
+			rei_message_screen("ROM not found", body);
+			sceKernelExitGame();
+			return 0;
+		}
+		const char *set_name = rei_core_game_set(game->game);
+		REI_LOG("reirem: rom %s (set %s, parent %s)\n", game->zip, set_name, game->parent);
+		{ // diag: heap (newlib used size/free space, memory left in the system)
+			const struct mallinfo mi = mallinfo();
+			REI_LOG("reirem: heap arena %u KB used %u KB free %u KB, system free %u KB max block %u KB\n", (unsigned)(mi.arena / 1024),
+				(unsigned)(mi.uordblks / 1024), (unsigned)(mi.fordblks / 1024), (unsigned)(sceKernelTotalFreeMemSize() / 1024),
+				(unsigned)(sceKernelMaxFreeMemSize() / 1024));
+		}
+		rei_settings_load_game(set_name);
+		rei_settings_save(); // remember last game
+		rei_loading_title(rei_core_game_title(game->game));
+		rei_loading_progress(0);
+		// Off-screen artwork (user artwork/<set>.png, parent set if missing)
+		video_load_art(g_app_dir, set_name, rei_core_game_parent(game->game));
+#ifdef REI_LOG_ENABLED
+		g_wd_done = 0;
+#endif
+		if (strcmp(rei_core_game_board(game->game), "M92") != 0) // other boards (run_other_board: ME draws, main runs the CPUs)
+			run = run_other_board(game, set_name);
+		else
+			run = run_m92(game, set_name);
+		// (the game's threads are gone. With the ME still in our code, HOME and the power switch stay main's job in the list too)
+		g_game_loop = g_me_ours;
+		power_lock(g_me_ours);
+#ifdef REI_LOG_ENABLED
+		g_wd_done = 1;
+#endif
+		rei_loading_done();
+		video_set_game_buffer(NULL, 0, 0, 0, 0);
+		if (run != REI_RUN_DONE || !g_to_list || g_home_exit)
+			break;
+		REI_LOG("reirem: back to the game list\n");
+	}
+	me_release(); // (the ME back to firmware before leaving: exit to XMB or module unload)
+	if (run == REI_RUN_DEV_STOP) {
 		// Unload only the module (the REIREM DEV game stays). Returning from main makes the C runtime _exit
 		// exit the whole game via sceKernelExitGame (to XMB) since sce_newlib_nocreate_thread_in_start is missing,
 		// so return the heap directly and unload ourselves. No malloc/printf after this
+		video_shutdown();
 		if (th >= 0)
 			sceKernelTerminateDeleteThread(th);
 #ifdef REI_LOG_ENABLED
@@ -3603,6 +3827,7 @@ exit_tail:
 	}
 	// (on exit the system restores default clocks, but with our code on the ME the clock change never completed and the power thread
 	// waited holding the ScePowerClock mutex — the ME is returned to firmware above)
+	video_shutdown();
 	g_cleanup_done = 1;
 #ifdef REI_PSP_ME
 	me_sound_trace("exit: cleanup done, home", (int)g_home_exit);
@@ -3611,25 +3836,6 @@ exit_tail:
 		REI_LOG("reirem: exit: HOME, cleanup done\n");
 		sceKernelSleepThread();
 	}
-#ifdef REI_PSP_ME
-	if (g_relaunch && g_eboot[0] && strncmp(g_eboot, "host", 4) != 0) {
-		// Relaunch our own EBOOT to return to the game list. User-mode sceKernelLoadExec went to XMB on this CFW -> use a kernel module (reilaunch,
-		// bundled in the EBOOT) calling SystemControl sctrlKernelLoadExecVSHMs2, the same call XMB uses to launch homebrew
-		char path[128];
-		snprintf(path, sizeof(path), "%sreilaunch.prx", g_app_dir);
-		const SceUID fd = sceIoOpen(path, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC, 0777);
-		if (fd >= 0) {
-			sceIoWrite(fd, reilaunch_prx, size_reilaunch_prx);
-			sceIoClose(fd);
-		}
-		const SceUID m = kuKernelLoadModule(path, 0, NULL);
-		int st = 0;
-		const int r = m >= 0 ? sceKernelStartModule(m, strlen(g_eboot) + 1, g_eboot, &st, NULL) : m;
-		REI_LOG("reirem: exit: relaunch %s via %s: %08x\n", g_eboot, path, r);
-		if (r >= 0)
-			sceKernelSleepThread(); // (the launcher thread will switch games shortly)
-	}
-#endif
 	REI_LOG("reirem: exit: sceKernelExitGame\n");
 	sceKernelExitGame();
 	return 0;

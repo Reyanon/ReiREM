@@ -75,7 +75,8 @@ typedef struct {
 	void *progress_user;
 } rei_core_config;
 
-// 0 = success. On failure see rei_core_error()
+// 0 = success. On failure see rei_core_error() (nothing to release then: do not call rei_core_exit). After
+// rei_core_exit another game can be started with rei_core_init in the same process (in-app game switching)
 int rei_core_init(const rei_core_config *cfg);
 void rei_core_exit(void);
 const char *rei_core_error(void);
@@ -206,6 +207,10 @@ int rei_core_sound_threaded(void);
 int rei_core_ym_worker(void);
 void rei_core_ym_worker_enable(int on);
 void rei_core_ym_worker_run(void);
+// M72-family boards without MCU: Z80 worker thread instead (same results; asks, enables, runs until rei_core_stop)
+int rei_core_z80_worker(void);
+void rei_core_z80_worker_enable(int on);
+void rei_core_z80_worker_run(void);
 // (PSP other boards) YM2151 synthesis on the ME: enable before starting the ME, disable after it stops. The ME loops rei_core_ym_me_poll.
 // When enabled, audio from rei_core_run_frame is one frame late (same results). 0 = success
 int rei_core_ym_me_supported(void);

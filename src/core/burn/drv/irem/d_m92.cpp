@@ -2048,8 +2048,11 @@ static INT32 DrvInit(INT32 (*pRomLoadCallback)(), const UINT8 *sound_decrypt_tab
 	return 0;
 }
 
+static void ReiPipeExit();
+
 static INT32 DrvExit()
 {
+	ReiPipeExit(); // (ReiREM: the next game in the same process starts the pipeline from scratch)
 	GenericTilesExit();
 
 	BurnYM2151Exit();
@@ -3438,6 +3441,27 @@ extern "C" int rei_m92_render_next(UINT8 *fb, INT32 pitch)
 // Returns -1 when no recorded frame waits, 1 after a piece, 0 when this call finished the frame.
 #define REI_RSTEP_TILES 24
 static struct { INT32 active, buf, seg, stage, k, offs; UINT32 prev_pos; } rei_rs;
+
+// ReiREM: game exit (another game may start in the same process, in-app game switching). Everything the pipeline and
+// the render side keep between frames goes back to its power-on value; the buffers sized for this game are freed
+static void ReiPipeExit()
+{
+	rei_m2s_w = rei_m2s_r = rei_s2m_w = rei_s2m_r = 0;
+	rei_main_line = rei_sound_line = rei_main_done = rei_sound_done = 0;
+	rei_sound_waiting = -1;
+	rei_span_active = rei_span_stop = rei_span_stop_line = 0;
+	rei_span_line0 = 0;
+	rei_span35_active = 0;
+	rei_span35_line0 = 0;
+	BurnFree(rei_vlog);
+	rei_vlog_w = rei_vlog_r = rei_vlog_lim = 0;
+	BurnFree(rei_rvram);
+	free(rei_row_presence);
+	rei_row_presence = NULL;
+	rei_gfx_produced = rei_gfx_consumed = 0;
+	memset(rei_gfx, 0, sizeof(rei_gfx));
+	memset(&rei_rs, 0, sizeof(rei_rs));
+}
 
 extern "C" INT32 rei_m92_render_step()
 {

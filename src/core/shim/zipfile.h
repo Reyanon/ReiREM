@@ -21,11 +21,17 @@ void rei_zip_close(rei_zip *z);
 int rei_zip_find(const rei_zip *z, const char *name, uint32_t crc);
 
 uint32_t rei_zip_entry_size(const rei_zip *z, int idx);
+// entries (files; folder entries left out) and an entry's full name with its folders ("sce_sys/icon0.png")
+int rei_zip_count(const rei_zip *z);
+const char *rei_zip_entry_path(const rei_zip *z, int idx);
 uint32_t rei_zip_entry_crc(const rei_zip *z, int idx);
 
 // Extract up to cap bytes into dst. Returns 0 on success, actual length in *out_len.
 // Fails if the CRC32 after extraction differs from the central directory value.
 int rei_zip_read(rei_zip *z, int idx, uint8_t *dst, uint32_t cap, uint32_t *out_len);
+
+// Called while an entry inflates (bytes out so far, entry size), when set. NULL = one inflate call (default)
+extern void (*rei_zip_tick)(uint32_t done, uint32_t total);
 
 #ifdef __cplusplus
 }
