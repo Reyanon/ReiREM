@@ -34,7 +34,7 @@ uint32_t rei_menu_accent(void);
 
 #include "rei_games.h"
 // Game list (all rei_games_scan results; board tabs with L/R, SELECT filter Playable / All / Favorites, Square favourite (star),
-// Triangle About, START options: Display, Controls, Refresh ROM list — global settings). Games without ROM are grey and show a
+// Triangle About, START options: Display, Controls, Refresh ROM list - global settings). Games without ROM are grey and show a
 // notice if picked. Returns the picked index (a game with ROM), REI_LIST_STOP (dev loop stop request) or REI_LIST_REFRESH
 // (Refresh ROM list: scan again and call again; rei_game_select_cursor = the game under the cursor)
 #define REI_LIST_STOP (-1)

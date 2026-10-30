@@ -288,7 +288,7 @@ static void do_prefetch(v25_state_t *nec_state, int previous_ICount, int sh)
 
 }
 
-// ReiREM port: do_prefetch with 2 cycles per byte (the V35) as a constant — the shifts and compares fold (same code otherwise)
+// ReiREM port: do_prefetch with 2 cycles per byte (the V35) as a constant - the shifts and compares fold (same code otherwise)
 static inline __attribute__((always_inline)) void do_prefetch2(v25_state_t *nec_state, int previous_ICount)
 {
 	int diff = previous_ICount - (int) nec_state->icount;
@@ -339,7 +339,7 @@ NEC_INLINE UINT16 fetchword(v25_state_t *nec_state)
 
 static UINT8 parity_table[256];
 
-// (ReiREM port: inlined into the run loop and prefix handlers — a call per instruction on the Vita)
+// (ReiREM port: inlined into the run loop and prefix handlers - a call per instruction on the Vita)
 static inline __attribute__((always_inline)) UINT8 fetchop(v25_state_t *nec_state)
 {
 	UINT8 ret;
@@ -745,7 +745,7 @@ static struct {
 	struct v25_auto_snap s;
 } v25_auto[4][V25_AUTO_SLOTS];
 static int v25_rec_owner = -1; // slot (cpu * V25_AUTO_SLOTS + j) whose iteration v25_rec logs
-// loop heads whose state kept changing (real work, not a wait): not checked again (as nec.cpp REI_AUTO_BAD) — the dynarec
+// loop heads whose state kept changing (real work, not a wait): not checked again (as nec.cpp REI_AUTO_BAD) - the dynarec
 // then runs them as compiled blocks (while a head is checked, its iteration runs in the interpreter so every access is logged)
 #define V25_AUTO_BAD 64
 static UINT32 v25_bad_head[V25_AUTO_BAD], v25_bad_from[V25_AUTO_BAD]; // (ReiREM: head and jump source, so inner/outer loops sharing a head are tracked separately)
@@ -962,7 +962,7 @@ static __attribute__((noinline)) void v25_auto_visit(v25_state_t *nec_state, int
 		if (v25_bad_head[bk] != head || v25_bad_from[bk] != from) { v25_bad_head[bk] = head; v25_bad_from[bk] = from; v25_bad_n[bk] = 0; v25_noskip_n[bk] = 0; v25_recfail_n[bk] = 0; }
 		if (v25_noskip_n[bk] < 255) v25_noskip_n[bk]++;
 	}
-	const int full = v25_drc_iter_interp; // (dynarec: a compiled block ran — its writes are not logged, nothing to compare)
+	const int full = v25_drc_iter_interp; // (dynarec: a compiled block ran - its writes are not logged, nothing to compare)
 	struct v25_auto_snap now;
 	v25_auto_take(&now, nec_state);
 	const UINT32 t = (UINT32)(nec_state->cycles_total + nec_state->cycles_remaining - nec_state->icount); // (cycles in this frame)
@@ -1009,7 +1009,7 @@ static __attribute__((noinline)) void v25_auto_visit(v25_state_t *nec_state, int
 			}
 		} else if (full && v25_rec_owner == cpu * V25_AUTO_SLOTS + j && v25_rec_n <= V25_REC_MAX) {
 			// counters: the iteration wrote only read-modify-write counters, the rest of the state repeats (the flags the
-			// loop reads at its head) — skip whole iterations, moving each counter by its step (as nec.cpp)
+			// loop reads at its head) - skip whole iterations, moving each counter by its step (as nec.cpp)
 			struct v25_units u;
 			const int units_ok = v25_units_of(&u);
 			if (units_ok && u.n > 0 && v25_auto[cpu][j].fx == rei_fx35 && d > 0 && d <= 2048 && !nec_state->no_interrupt &&
@@ -1106,7 +1106,7 @@ static int v35_run_no, v35_pcrun = -2, v35_chip; // (v35_chip: REI_V35_CHIP; M10
 #endif
 // ---------------------------------------------------------------------------------------------------------------------
 // ReiREM PSP port: the V33/V30 dynarec (nec_drc.inc, ADR-020/024) once more for the V35 (main CPU of M90 and the V35 M72
-// boards: it runs as a V30 — same cycle tables and prefetch). Differences handled here (REI_DRC_V25):
+// boards: it runs as a V30 - same cycle tables and prefetch). Differences handled here (REI_DRC_V25):
 // - registers and segment registers live in the internal RAM bank (RBW): blocks are compiled for one bank (block key)
 // - internal RAM / SFR (IDB page, and 0xffffe/f): the compiled code's page tables leave that page empty -> slow path ->
 //   v25_read_* / v25_write_* (the interpreter's memory functions)
@@ -1198,7 +1198,7 @@ static void drc35_tim_update(v25_state_t *nec_state, int tn, int tapply)
 }
 
 // (PSP) one code cache region for both dynarec instances: the V30/V33 one has it when that CPU is in the game (M92/M107
-// main CPU — the sound V35 waits most of the time anyway); the V35 one only on boards whose main CPU is the V35 (M90, M72 V35)
+// main CPU - the sound V35 waits most of the time anyway); the V35 one only on boards whose main CPU is the V35 (M90, M72 V35)
 // (2026-10-13) on M107 the sound V35 also runs on main (single-thread pipeline), 1/3 of main insns in dsoccr94 gameplay. Then V35 gets
 // a separate heap code area (nec_drc.inc drc_init). M92 (threaded) with V35 on the ME stays interpreted
 extern "C" int rei_nec_present(void);

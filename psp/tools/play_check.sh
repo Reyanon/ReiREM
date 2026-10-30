@@ -53,7 +53,7 @@ diag() {
 # After diagnosis, PSPLink reset back to XMB (hung device recovery, allowed 2026-10-17). RESET_ON_FAIL=0 leaves it as is
 fail() {
 	echo "FAIL: $*"; diag; rm -f "$D/rei_game" "$D/rei_home" "$D/rei_select" "$D/rei_ysplit"
-	# (No reset on failures before a game is launched — build errors, or the device in use (not XMB/REIREM DEV): a reset once killed
+	# (No reset on failures before a game is launched - build errors, or the device in use (not XMB/REIREM DEV): a reset once killed
 	#  an installed build mid-play, 2026-10-17)
 	if [ "${RESET_ON_FAIL:-1}" = 1 ] && [ "${STARTED:-0}" = 1 ]; then
 		psh reset >/dev/null
@@ -86,14 +86,14 @@ install_eboot() { # $1 = EBOOT.PBP. Large file copies only work inside REIREM DE
 
 install_eboot build-psp-playtest/EBOOT.PBP
 echo "installing test build"
-# All test features are now on by default (play-tested 2026-10-17) — remove old enable files from the app folder. Disable files are no<name>
+# All test features are now on by default (play-tested 2026-10-17) - remove old enable files from the app folder. Disable files are no<name>
 for f in meym meysplit z80drc m107ge m107mesnd m92drc35 m72ge; do psh "rm ms0:/PSP/GAME/REIREM/$f" >/dev/null; done
 psh "ls ms0:/PSP/GAME/REIREM" | grep -E " (meym|meysplit|z80drc|m107ge|m107mesnd|m92drc35|m72ge)$" && fail "old enable files remain"
 echo "old enable files cleaned"
 # YSPLIT=1: the test build switches the YM2151 split at frames 900/1200/1500/1800 (exercises the switch path even in the demo)
 [ "${YSPLIT:-0}" = 1 ] && : > "$D/rei_ysplit"
 # SWITCH=1: move between games the same way as options "Select game" (host0:/rei_select: the game ends, the app goes back to its
-#           game list in the same process and the list starts host0:/rei_game — no relaunch). Only the last game exits via HOME.
+#           game list in the same process and the list starts host0:/rei_game - no relaunch). Only the last game exits via HOME.
 #           The test build appends the free memory at each return to the list to host0:/rei_mem.txt (shown at the end: must not shrink)
 n=0; set -- $GAMES; last=$#
 rm -f "$D/rei_mem.txt"
@@ -109,9 +109,9 @@ for g in $GAMES; do
 	else
 		psh "ldstart host0:/devstub/nbblaunch_play.prx" >/dev/null
 	fi
-	sleep ${PLAY_S:-40} # (PLAY_S: play seconds per game — 60+ for things that switch after 1200 frames, like the split)
+	sleep ${PLAY_S:-40} # (PLAY_S: play seconds per game - 60+ for things that switch after 1200 frames, like the split)
 	uh_ok; moving; m=$?
-	[ $m = 2 ] && fail "$g: capture failed (PSPLink not responding — hung)"
+	[ $m = 2 ] && fail "$g: capture failed (PSPLink not responding - hung)"
 	[ $m = 1 ] && fail "$g: screen unchanged for 10 s (hung)"
 	if [ "${SWITCH:-0}" = 1 ] && [ $n -lt $last ]; then
 		echo "PASS $g (start, run)"

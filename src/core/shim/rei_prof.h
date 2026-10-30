@@ -35,11 +35,11 @@ enum {
 
 #define REI_PROF_SAMPLE_SHIFT 6 // 1/64 sampling
 
-// For CPU run functions (other boards, 1/16 sampling): static counter inside the function, mixed before selecting — plain n & 15
+// For CPU run functions (other boards, 1/16 sampling): static counter inside the function, mixed before selecting - plain n & 15
 // aliases with the CPUs' alternation period and measures only one CPU. (one clock read ~1.3µs: timing every call inflates numbers)
-// (REI_PROF_FRAME_ONLY: CPU sections are not timed — so clock reads (syscalls) add no cache misses when measuring with HW counters)
+// (REI_PROF_FRAME_ONLY: CPU sections are not timed - so clock reads (syscalls) add no cache misses when measuring with HW counters)
 #if defined(REI_PROFILE) && defined(REI_PROF_CPU_ALL)
-// (diag) time every call without sampling — exact share for rarely-called CPUs (hundreds/frame). Adds the clock read cost accordingly
+// (diag) time every call without sampling - exact share for rarely-called CPUs (hundreds/frame). Adds the clock read cost accordingly
 #define REI_PROF_CPU_BEGIN(name) uint64_t rei_prof_t_##name = rei_prof_clock()
 #define REI_PROF_CPU_END(name, id) \
 	do { if (rei_prof_t_##name) REI_PROF_ACC[id] += rei_prof_clock() - rei_prof_t_##name; } while (0)

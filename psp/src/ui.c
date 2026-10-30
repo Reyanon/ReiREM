@@ -149,7 +149,7 @@ void ui_grad(int x, int y, int w, int h, uint32_t top, uint32_t bot)
 	v[1] = (struct cv){ top, (float)(x + w), (float)y, 0 };
 	v[2] = (struct cv){ bot, (float)x, (float)(y + h), 0 };
 	v[3] = (struct cv){ bot, (float)(x + w), (float)(y + h), 0 };
-	sceGuEnable(GU_DITHER); // (the screen is 16-bit: a smooth gradient bands without it. Text and edges stay undithered — dots around text)
+	sceGuEnable(GU_DITHER); // (the screen is 16-bit: a smooth gradient bands without it. Text and edges stay undithered - dots around text)
 	sceGuDrawArray(GU_TRIANGLE_STRIP, CV_TYPE, 4, NULL, v);
 	sceGuDisable(GU_DITHER);
 }
@@ -282,7 +282,7 @@ int ui_toggle(int x, float cy, int on, uint32_t track, uint32_t knob)
 	return p->w;
 }
 
-// soft drop shadow (offset 2, 3; about 5 px wide): stacked translucent rounded rectangles, each a pixel larger — the window
+// soft drop shadow (offset 2, 3; about 5 px wide): stacked translucent rounded rectangles, each a pixel larger - the window
 // covers the inside, so outside the alpha falls off towards the edge
 void ui_window(int x, int y, int w, int h, uint32_t edge, uint32_t fill)
 {

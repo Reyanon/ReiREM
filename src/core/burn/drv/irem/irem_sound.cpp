@@ -38,7 +38,7 @@ void IremSoundWrite(UINT8 d)
 			irem_batch_ev_data[irem_batch_n++] = d;
 			return;
 		}
-		irem_batch_on = 0; // (overflow: should not happen — apply directly)
+		irem_batch_on = 0; // (overflow: should not happen - apply directly)
 	}
 	IremSoundWriteNow(d);
 }
@@ -254,7 +254,7 @@ static void AY8910_1PortAWrite(UINT32, UINT32 data)
 
 inline static INT32 IremSynchroniseStream(INT32 nSoundRate)
 {
-	// (ReiREM: same value as the double expression (INT64)((double)cycles * rate / clock), in integers — the product is below 2^53 so exact,
+	// (ReiREM: same value as the double expression (INT64)((double)cycles * rate / clock), in integers - the product is below 2^53 so exact,
 	//  and with the quotient below 2^53 / clock, division rounding cannot change the integer part (1 - rem/clock ≥ 1/clock > ULP/2). PSP double
 	//  is software and this ran on every MSM5205 sync)
 	return (INT32)((INT64)ZetTotalCycles() * nSoundRate / IremZ80Clock);
@@ -297,7 +297,7 @@ void IremSoundInit(UINT8 *pZ80ROM, INT32 nType, INT32 nZ80Clock)
 	M6803SetWritePortHandler(IremM6803WritePort);
 	M6803Close();
 #ifndef REI_NO_M6803_IDLE
-	m6803_idle_read_ok = IremM6803IdleReadOk; // (ReiREM: idle-loop skip — 0x80~0xff is internal RAM)
+	m6803_idle_read_ok = IremM6803IdleReadOk; // (ReiREM: idle-loop skip - 0x80~0xff is internal RAM)
 #endif
 
 	AY8910Init(0, 894886, 0);

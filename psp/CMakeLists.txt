@@ -42,11 +42,11 @@ endif()
 
 enable_language(ASM)
 # Outside-screen artwork is not bundled (copyright): users put artwork/<set>.png in the app folder
-# (src/font_ui.c: the menu font, Noto Sans pre-rendered by psp/tools/make_font.py — SIL OFL 1.1, psp/font/OFL.txt)
+# (src/font_ui.c: the menu font, Noto Sans pre-rendered by psp/tools/make_font.py - SIL OFL 1.1, psp/font/OFL.txt)
 add_executable(reirem src/main.c src/video.c src/ge_layers.c src/ge_m107.c src/ge_m72.c src/atomic64.c src/settings.c src/menu.c src/ui.c
   src/font_ui.c)
 target_link_libraries(reirem PRIVATE rei_core z pspgu pspdebug pspdisplay pspge pspctrl psppower psprtc pspdmac m)
-# Loading screen background: the app's own art (vita/sce_sys/livearea/contents/bg.png, shapes and text only — tools/make_app_art.py),
+# Loading screen background: the app's own art (vita/sce_sys/livearea/contents/bg.png, shapes and text only - tools/make_app_art.py),
 # bundled into the EBOOT (#included by menu.c)
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/rei_bg_png.c
   COMMAND ${PSPDEV}/bin/bin2c ${REI_ROOT}/vita/sce_sys/livearea/contents/bg.png ${CMAKE_CURRENT_BINARY_DIR}/rei_bg_png.c rei_bg_png
@@ -80,13 +80,13 @@ endif()
 option(REI_PSP_ME "Run the sound side on the Media Engine" ON)
 if(REI_PSP_ME)
   target_compile_definitions(rei_core PUBLIC REI_ME_SPLIT REI_YM_LAZY)
-  # Other boards: YM2151 synthesis on the ME (along with ME drawing, sound 1 frame late — burn_ym2151.cpp REI_YM_ME)
+  # Other boards: YM2151 synthesis on the ME (along with ME drawing, sound 1 frame late - burn_ym2151.cpp REI_YM_ME)
   target_compile_definitions(rei_core PUBLIC REI_YM_ME)
-  # YM2151 synthesis rate (0 = original 55.9kHz, 1 = half 28kHz: saves ~4-5ms on the sound side, highs differ slightly — approved)
+  # YM2151 synthesis rate (0 = original 55.9kHz, 1 = half 28kHz: saves ~4-5ms on the sound side, highs differ slightly - approved)
   set(REI_PSP_YM_RATE_SHIFT "1" CACHE STRING "YM2151 synthesis rate reduction step")
   if(NOT REI_PSP_YM_RATE_SHIFT STREQUAL "0")
     target_compile_definitions(rei_core PUBLIC REI_YM_RATE_SHIFT=${REI_PSP_YM_RATE_SHIFT})
-  endif() # REI_YM_SPLIT: split YM2151 channels (accurate, but currently a loss — PERF PP8)
+  endif() # REI_YM_SPLIT: split YM2151 channels (accurate, but currently a loss - PERF PP8)
   set(REI_PSP_YM_MAIN "0" CACHE STRING "YM2151 channel bits synthesized by the main CPU (0 = all on ME)")
   target_compile_definitions(reirem PRIVATE REI_PSP_YM_MAIN=${REI_PSP_YM_MAIN})
   if(NOT REI_PSP_YM_MAIN STREQUAL "0")
@@ -94,7 +94,7 @@ if(REI_PSP_ME)
   endif()
   target_compile_definitions(reirem PRIVATE REI_PSP_ME)
   target_sources(reirem PRIVATE src/me_sound.c src/overclock.c)
-  # Overclock (PSP-2000/3000/go, direct PLL multiplier control — src/overclock.c). Off by default: on the dev unit (6.61 PRO family CFW), writing
+  # Overclock (PSP-2000/3000/go, direct PLL multiplier control - src/overclock.c). Off by default: on the dev unit (6.61 PRO family CFW), writing
   # the PLL multiplier register via kcall powered off even when rewriting the same value (PSP-ADR-006)
   set(REI_PSP_OC_MHZ "0" CACHE STRING "CPU clock MHz (above 333 = PLL overclock, 0 = off)")
   target_compile_definitions(reirem PRIVATE REI_PSP_OC_MHZ=${REI_PSP_OC_MHZ})
@@ -110,13 +110,13 @@ if(REI_PSP_ME)
     if(NOT REI_PSP_DRC_EXTRA_KB STREQUAL "0")
       target_compile_definitions(rei_core PRIVATE REI_DRC_EXTRA_KB=${REI_PSP_DRC_EXTRA_KB})
     endif()
-    # On first fill, grow the second region to this size (boards with large game code — M107 dsoccr94 in-game 3.3MB overflowed to the interpreter)
-    set(REI_PSP_DRC_GROW_KB "8192" CACHE STRING "Size KB to grow the dynarec second region (0 = no growth, halves on failure) — dsoccr94 code exceeded 4MB on hardware")
+    # On first fill, grow the second region to this size (boards with large game code - M107 dsoccr94 in-game 3.3MB overflowed to the interpreter)
+    set(REI_PSP_DRC_GROW_KB "8192" CACHE STRING "Size KB to grow the dynarec second region (0 = no growth, halves on failure) - dsoccr94 code exceeded 4MB on hardware")
     if(NOT REI_PSP_DRC_GROW_KB STREQUAL "0")
       target_compile_definitions(rei_core PRIVATE REI_DRC_GROW_KB=${REI_PSP_DRC_GROW_KB})
     endif()
   endif()
-  # Experiment: padding before the module (before ME code) — check whether launch method changes module address and ME cache layout
+  # Experiment: padding before the module (before ME code) - check whether launch method changes module address and ME cache layout
   set(REI_PSP_ME_PAD "0" CACHE STRING "Padding bytes before ME code")
   if(NOT REI_PSP_ME_PAD STREQUAL "0")
     target_link_options(reirem PRIVATE -Wl,--defsym=REI_ME_PAD=${REI_PSP_ME_PAD})
@@ -188,10 +188,10 @@ if(NOT REI_HWPROF STREQUAL "")
   target_sources(reirem PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/nbbkprof_stub.S)
 endif()
 
-# BUILD_PRX: put a PRX in the EBOOT instead of the elf. ENC_PRX: encrypt that PRX — unencrypted, launching
+# BUILD_PRX: put a PRX in the EBOOT instead of the elf. ENC_PRX: encrypt that PRX - unencrypted, launching
 # from the XMB failed with "8002014E" (2026-10-09 on hardware)
 # REI_PSP_ENC=OFF: skip encryption. With V33 recompilation (REI_RECOMP) code reaches 19MB and PrxEncrypter dies with
-# "buffer overflow" — the dev loop (PSPLink) uses only the plain PRX, so turn it off then
+# "buffer overflow" - the dev loop (PSPLink) uses only the plain PRX, so turn it off then
 option(REI_PSP_ENC "Encrypt the EBOOT's PRX (for XMB launch)" ON)
 set(REI_PSP_TITLE "ReiREM" CACHE STRING "XMB title (change to install a comparison build separately)")
 if(REI_PSP_ENC)

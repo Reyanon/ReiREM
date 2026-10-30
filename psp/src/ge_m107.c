@@ -19,7 +19,7 @@
 #define SCR_H 240
 #define VTYPE_2D 0x800102u // GU_TEXTURE_16BIT | GU_VERTEX_16BIT | GU_TRANSFORM_2D
 
-// GE commands (same values pspsdk sceGu emits — the PSP dev build checks them against sceGu output at startup: gem_selftest)
+// GE commands (same values pspsdk sceGu emits - the PSP dev build checks them against sceGu output at startup: gem_selftest)
 enum {
 	GE_VADDR = 0x01, GE_PRIM = 0x04, GE_BASE = 0x10, GE_VTYPE = 0x12, GE_RET = 0x0b,
 	GE_TBP0 = 0xa0, GE_TBW0 = 0xa8, GE_CBP = 0xb0, GE_CBW = 0xb1, GE_TSIZE0 = 0xb8, GE_CLOAD = 0xc4, GE_CMODE = 0xc5,
@@ -91,7 +91,7 @@ static void emit_row(const rei_m107_layer *L, int map_row, int scrollx_1, int y,
 			continue;
 		o->x = (int16_t)(8 * k + x0);
 		o->y = (int16_t)y;
-		o->tile = (uint16_t)tile; // (atlas window is tile >> 12: up to 17 bits in the key below — tile kept in 16 bits, window bits separate)
+		o->tile = (uint16_t)tile; // (atlas window is tile >> 12: up to 17 bits in the key below - tile kept in 16 bits, window bits separate)
 		o->pal = (uint8_t)(attr & 0x7f);
 		o->flags = (uint8_t)(((attr & 0x0400) ? 1 : 0) | ((attr & 0x0800) ? 2 : 0) | ((tile >> 16) << 2));
 		o->h = (uint8_t)h;
@@ -167,7 +167,7 @@ static void emit_pass(int opaque, int ref)
 	g_f.ntiles += n;
 	cmd(GE_STST, 1u | ((uint32_t)ref << 8) | (0xffu << 16)); // GU_ALWAYS
 	cmd(GE_SOP, 0u | (0u << 8) | (2u << 16));                 // KEEP, KEEP, REPLACE
-	// key = CLUT bank (palette >> 5) | texture window | palette & 31 — 12 bits, two 6-bit radix passes (stable)
+	// key = CLUT bank (palette >> 5) | texture window | palette & 31 - 12 bits, two 6-bit radix passes (stable)
 	for (int i = 0; i < n; i++) {
 		const gt *t = &g_t[i];
 		const uint32_t win = (uint32_t)((t->tile >> 12) | ((t->flags >> 2) << 4));
@@ -250,7 +250,7 @@ static void gem_frame_begin(rei_m107_spr *out)
 	}
 	out->a = s->spr_a;
 	out->b = s->spr_b;
-	{ // (lines to clear in A: union of sprite lines of the frame that last wrote this buffer — none for a first-written buffer)
+	{ // (lines to clear in A: union of sprite lines of the frame that last wrote this buffer - none for a first-written buffer)
 		int y0 = 240, y1 = 0;
 		for (int i = 0; i < 8; i++) {
 			if (s->res->ay1[i] > s->res->ay0[i]) {

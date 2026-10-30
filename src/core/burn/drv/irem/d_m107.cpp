@@ -67,7 +67,7 @@ static INT32 irq_vectorbase;
 static INT32 graphics_mask[2];
 #ifndef REI_ORIGINAL_DRAW
 // (ReiREM) Per row of each 8x8 tile: bit r = row r has a nonzero pixel, bit 8+r = row r is all nonzero. Built by main at init,
-// read-only for drawing (incl. ME) — draw_layer_byline skips empty rows and writes full rows without tests (same result)
+// read-only for drawing (incl. ME) - draw_layer_byline skips empty rows and writes full rows without tests (same result)
 static UINT16 *m107_rowpens;
 static UINT16 *m107_sprrows; // (16x16 sprite tiles: bit r = row r has a nonzero pixel)
 static void m107_sprrows_build(const UINT8 *gfx, INT32 tiles)
@@ -101,14 +101,14 @@ static void m107_rowpens_build(const UINT8 *gfx, INT32 tiles)
 	}
 }
 
-// (ReiREM) GE mode (rei_m107ge.h): ops chosen by the frontend (set by main before starting the ME, read by render — uncached),
+// (ReiREM) GE mode (rei_m107ge.h): ops chosen by the frontend (set by main before starting the ME, read by render - uncached),
 // render-side frame state (render only), sprite coverage table (allocated in init, render only)
 static const rei_m107_ge_ops *m107_ge_ops REI_ME_SHARED;
 static INT32 m107_ge_check REI_ME_SHARED;
 static REI_RDR const rei_m107_ge_ops *m107_cur;
 static REI_RDR rei_m107_spr m107_spr;
 static REI_RDR INT32 m107_nb, m107_ab;
-static REI_RDR INT16 m107_cov_y0, m107_cov_y1 = 240; // (lines in the coverage table that had sprites last frame — all at first)
+static REI_RDR INT16 m107_cov_y0, m107_cov_y1 = 240; // (lines in the coverage table that had sprites last frame - all at first)
 static UINT8 *m107_cov;
 static UINT16 m107_palshadow[0x800]; // (previous palette RAM values: m107_pal_sync)
 extern "C" void rei_m107_set_ge(const rei_m107_ge_ops *ops, int check)
@@ -126,7 +126,7 @@ extern "C" int rei_m107_get_tiles(rei_m107_tiles *out)
 }
 #endif
 
-// (ReiREM: M107 pipeline, ADR-019) Main (V33) and sound (V35/YM2151/GA20) run separately — same rules as M92
+// (ReiREM: M107 pipeline, ADR-019) Main (V33) and sound (V35/YM2151/GA20) run separately - same rules as M92
 // ADR-003/006: main→sound (latch, sound reset) applies on the same line, sound→main (status) 32 lines later. Sound follows main,
 // and main may run up to 32 lines ahead, so both cores run concurrently. Result is independent of thread timing (even single-threaded)
 extern "C" int rei_pipelined, rei_threaded;
@@ -144,7 +144,7 @@ static INT64 m107_sound_line_of_ins(); // (m107_run_sound_lines below: during a 
 struct m107_s2m { INT64 src_line; INT64 apply; UINT8 data; };   // apply = main absolute cycle (frame start + cycle within frame)
 #ifdef REI_ME_SPLIT
 // (PSP) The sound side can run on the ME: shared data lives in a separately aligned region, accessed uncached only (same as M92, rei_me.h).
-// 64-bit atomics cannot be shared with the ME — uncached read/write + sync (only one side writes each value)
+// 64-bit atomics cannot be shared with the ME - uncached read/write + sync (only one side writes each value)
 static struct m107_m2s m107_m2s_q_[M107_RING] REI_ME_SHARED;
 static struct m107_s2m m107_s2m_q_[M107_RING] REI_ME_SHARED;
 static UINT32 m107_m2s_w_ REI_ME_SHARED, m107_m2s_r_ REI_ME_SHARED, m107_s2m_w_ REI_ME_SHARED, m107_s2m_r_ REI_ME_SHARED;
@@ -170,7 +170,7 @@ static struct m107_m2s m107_m2s_q[M107_RING];
 static struct m107_s2m m107_s2m_q[M107_RING];
 static UINT32 m107_m2s_w, m107_m2s_r, m107_s2m_w, m107_s2m_r;
 static INT64 m107_main_done, m107_sound_done, m107_sound_waiting = -1; // lines published, line sound is waiting on (-1 none)
-static UINT32 m107_epoch; // pipeline restart count (m107_pipe_clear) — sound side discards the frame it was waiting on
+static UINT32 m107_epoch; // pipeline restart count (m107_pipe_clear) - sound side discards the frame it was waiting on
 #define M107_LOAD(x)     __atomic_load_n(&(x), __ATOMIC_ACQUIRE)
 #define M107_STORE(x, v) __atomic_store_n(&(x), (v), __ATOMIC_RELEASE)
 #endif
@@ -464,7 +464,7 @@ static void __fastcall m107WriteByte(UINT32 address, UINT8 data)
 	}
 }
 
-// (ReiREM) Copy of plain port 0..7 values: dynarec reads IN without a handler (rei_nec_port_shadow). Same values as m107ReadPort —
+// (ReiREM) Copy of plain port 0..7 values: dynarec reads IN without a handler (rei_nec_port_shadow). Same values as m107ReadPort -
 // rebuilt whenever input/DIP/vblank change (between lines, V33 not running). dsoccr94's vblank wait loop read it ~800 times per frame
 static UINT8 m107_port_shadow[8] __attribute__((aligned(8)));
 static void m107_port_shadow_update()
@@ -854,7 +854,7 @@ static INT32 DrvInit(INT32 (*pRomLoadCallback)(), const UINT8 *sound_decrypt_tab
 		VezMapArea(0xf9000, 0xf9fff, 0, DrvPalRAM);
 #ifndef REI_ORIGINAL_DRAW
 		// (ReiREM) Palette RAM writes are also direct-mapped: instead of recomputing colors in a handler per write, only changed entries at
-		// frame end (m107_pal_sync) — the palette is only used at draw frame end. The dynarec slow path was hit 800 times per frame (dsoccr94, airass)
+		// frame end (m107_pal_sync) - the palette is only used at draw frame end. The dynarec slow path was hit 800 times per frame (dsoccr94, airass)
 		VezMapArea(0xf9000, 0xf9fff, 1, DrvPalRAM);
 #endif
 		VezMapArea(0xff800, 0xfffff, 0, DrvV33ROM + 0x7f800);
@@ -864,7 +864,7 @@ static INT32 DrvInit(INT32 (*pRomLoadCallback)(), const UINT8 *sound_decrypt_tab
 		VezSetReadPort(m107ReadPort);
 		VezSetWritePort(m107WritePort);
 		VezClose();
-		// (ReiREM: ports 0-7 = input/DIP/vblank — change only between frames/lines. Loops waiting on these ports also auto-idle, nec.cpp)
+		// (ReiREM: ports 0-7 = input/DIP/vblank - change only between frames/lines. Loops waiting on these ports also auto-idle, nec.cpp)
 		extern UINT32 rei_nec_pure_ports;
 		rei_nec_pure_ports = 0xff;
 		extern UINT8 *rei_nec_port_shadow;
@@ -884,7 +884,7 @@ static INT32 DrvInit(INT32 (*pRomLoadCallback)(), const UINT8 *sound_decrypt_tab
 		VezSetReadHandler(m107SndReadByte);
 		VezSetWriteHandler(m107SndWriteByte);
 		VezClose();
-		// (ReiREM: V35 memory is used only by the V35 — keep auto-idle records across runs, v25.cpp)
+		// (ReiREM: V35 memory is used only by the V35 - keep auto-idle records across runs, v25.cpp)
 		extern int rei_v25_auto_keep;
 		rei_v25_auto_keep = 1;
 	}
@@ -903,7 +903,7 @@ static INT32 DrvInit(INT32 (*pRomLoadCallback)(), const UINT8 *sound_decrypt_tab
 	irq_vectorbase = vectorbase;
 	m107_delay = (rei_s2m_delay >= 1 && rei_s2m_delay <= 240) ? rei_s2m_delay : M107_DELAY; // (core setting s2m_delay_lines, default 32)
 	// (m107_main_begin rewrites the same value every frame. Set early here: when PSP sound runs on the ME, the ME reads memory, but
-	//  a main-written value may sit in main cache — so set it at init, which is flushed before start)
+	//  a main-written value may sit in main cache - so set it at init, which is flushed before start)
 	m107_total33 = (INT32)((INT64)(config_cpu_speed / 60) * nBurnCPUSpeedAdjust / 0x0100);
 	m107_total35 = (INT32)((INT64)(7159090 / 60) * nBurnCPUSpeedAdjust / 0x0100);
 
@@ -994,7 +994,7 @@ static void RenderTilePrio(UINT16 *dest, UINT8 *gfx, INT32 code, INT32 color, IN
 			const UINT8 *src = g + srow * 16;
 			UINT16 *d = dest + yy * nScreenWidth + sx;
 			UINT8 *pp = pri + yy * nScreenWidth + sx;
-			if (inx) { // (interior: no bounds tests, flip once per row — same result)
+			if (inx) { // (interior: no bounds tests, flip once per row - same result)
 				const INT32 step = flipx ? -1 : 1;
 				const UINT8 *s = flipx ? src + 15 : src;
 				for (INT32 x = 0; x < 16; x++, s += step) {
@@ -1044,7 +1044,7 @@ static void RenderTilePrio(UINT16 *dest, UINT8 *gfx, INT32 code, INT32 color, IN
 	}
 }
 
-// One sprite tile (16x16): CPU uses RenderTilePrio, GE mode uses spr_ge (A/B buffers — rei_m107ge.h)
+// One sprite tile (16x16): CPU uses RenderTilePrio, GE mode uses spr_ge (A/B buffers - rei_m107ge.h)
 typedef void (*m107_spr_fn)(INT32 code, INT32 color, INT32 sx, INT32 sy, INT32 flipx, INT32 flipy, INT32 prio);
 static void spr_cpu(INT32 code, INT32 color, INT32 sx, INT32 sy, INT32 flipx, INT32 flipy, INT32 prio)
 {
@@ -1061,7 +1061,7 @@ static void spr_ge(INT32 code, INT32 color, INT32 sx, INT32 sy, INT32 flipx, INT
 	const UINT8 *g = DrvGfxROM1 + code * 256;
 	const UINT16 hid = prio ? 0x1000 : 0;
 	const UINT8 mark = prio ? 1 : 2;
-	{ // (line range: GE composition touches only these lines — over-wide is fine even without pixels)
+	{ // (line range: GE composition touches only these lines - over-wide is fine even without pixels)
 		const INT32 y0 = sy < 0 ? 0 : sy, y1 = sy + 16 > nScreenHeight ? nScreenHeight : sy + 16;
 		const INT32 bk = (color >> 8) & 7;
 		if (y0 < m107_spr.ay0[bk]) m107_spr.ay0[bk] = (INT16)y0;
@@ -1078,7 +1078,7 @@ static void spr_ge(INT32 code, INT32 color, INT32 sx, INT32 sy, INT32 flipx, INT
 		const UINT8 *src = g + srow * 16;
 		UINT16 *a = m107_spr.a + yy * nScreenWidth;
 		UINT8 *cv = m107_cov + yy * nScreenWidth;
-		if (sx >= 0 && sx + 16 <= nScreenWidth) { // (interior: no bounds tests, flip once per row — same result)
+		if (sx >= 0 && sx + 16 <= nScreenWidth) { // (interior: no bounds tests, flip once per row - same result)
 			const INT32 step = flipx ? -1 : 1;
 			const UINT8 *s = flipx ? src + 15 : src;
 			UINT16 *ap = a + sx;
@@ -1220,7 +1220,7 @@ static void draw_layer_byline(INT32 start, INT32 finish, INT32 layer, INT32 forc
 	UINT16 *yscroll = (UINT16*)(DrvVidRAM + (0xe800 + 0x200 * layer));
 
 #ifndef REI_ORIGINAL_DRAW
-	// (ReiREM) Screen lines with the same tile row and x scroll share tile decoding (address, attr, code, color, flip, row pens) — done once
+	// (ReiREM) Screen lines with the same tile row and x scroll share tile decoding (address, attr, code, color, flip, row pens) - done once
 	// and reused by the following lines (once per 8 lines without row scroll). Drawing is the same as the original path below
 	if (m107_rowpens && nScreenWidth + 8 <= 8 * 64) {
 		struct col { const UINT8 *rom; UINT32 pens, color; INT16 xx; UINT8 x_xor, flipy; };
@@ -1388,7 +1388,7 @@ static void draw_layer_byline(INT32 start, INT32 finish, INT32 layer, INT32 forc
 static void DrawLayers(INT32 start, INT32 finish)
 {
 #ifndef REI_ORIGINAL_DRAW
-	if (m107_cur) { // (ReiREM GE mode: hand layer state to the frontend instead of pixels — rei_m107ge.h)
+	if (m107_cur) { // (ReiREM GE mode: hand layer state to the frontend instead of pixels - rei_m107ge.h)
 		rei_m107_seg s;
 		s.start = start;
 		s.finish = finish;
@@ -1438,7 +1438,7 @@ static void m107_frame_end()
 {
 #ifndef REI_ORIGINAL_DRAW
 	if (m107_cur) { // (GE mode: sprites go to A/B buffers, priority against layers is done by the GE)
-		// (clear only lines where this A buffer/coverage table had sprites last time — the rest are already 0)
+		// (clear only lines where this A buffer/coverage table had sprites last time - the rest are already 0)
 		if (m107_spr.clr_y1 > m107_spr.clr_y0)
 			memset(m107_spr.a + m107_spr.clr_y0 * nScreenWidth, 0, (m107_spr.clr_y1 - m107_spr.clr_y0) * nScreenWidth * sizeof(UINT16));
 		if (m107_cov_y1 > m107_cov_y0)
@@ -1494,8 +1494,8 @@ struct m107_seg {
 static void m107_capture(void *p)
 {
 	struct m107_seg *g = (struct m107_seg *)p;
-	rei_big_copy(g->vidram, DrvVidRAM, sizeof(g->vidram)); // (struct start: 64-byte boundary — PSP uses DMA)
-	// (sprite buffer, palette, sprite_enable are read only at frame end (m107_frame_end) — captured by m107_capture_end)
+	rei_big_copy(g->vidram, DrvVidRAM, sizeof(g->vidram)); // (struct start: 64-byte boundary - PSP uses DMA)
+	// (sprite buffer, palette, sprite_enable are read only at frame end (m107_frame_end) - captured by m107_capture_end)
 	for (INT32 i = 0; i < 4; i++) {
 		memcpy(g->pf_control[i], pf_control[i], 8);
 		g->layers[i] = *m107_layers[i];
@@ -1505,7 +1505,7 @@ static void m107_capture(void *p)
 			g->layers[i].scroll = (UINT16 *)(g->vidram + ((UINT8 *)m107_layers[i]->scroll - DrvVidRAM));
 	}
 }
-// Frame-end state: only what m107_frame_end (sprites, transfer) reads (64KB VRAM goes with draw segments only — ~1ms per PSP main frame)
+// Frame-end state: only what m107_frame_end (sprites, transfer) reads (64KB VRAM goes with draw segments only - ~1ms per PSP main frame)
 static void m107_capture_end(void *p)
 {
 	struct m107_seg *g = (struct m107_seg *)p;
@@ -1742,7 +1742,7 @@ extern "C" { unsigned rei_m107_us[4]; unsigned (*rei_m107_clock)(void); } // (3:
 #define M107_ACC(i, t0) do { } while (0)
 #endif
 // One main line: check sound finished the line 32 back, apply arrived status events at their cycle, run V33 to line end
-#ifdef REI_YM_SPLIT // (PSP: sound side on ME with YM2151 synthesized by main — drain the ring every line, burn_ym2151.cpp)
+#ifdef REI_YM_SPLIT // (PSP: sound side on ME with YM2151 synthesized by main - drain the ring every line, burn_ym2151.cpp)
 extern "C" INT32 rei_ym_split_on;
 extern "C" int rei_ym_main_poll(void);
 #endif
@@ -1824,7 +1824,7 @@ REI_LINE_FN(27) static INT32 m107_run_main_span(INT32 l, INT32 e)
 		if (left > 0) VezRun(left);
 		if (m107_span_stop) {
 			m107_span_stop = 0;
-			last = m107_span_stop_line; // (finish that line normally — more events may follow)
+			last = m107_span_stop_line; // (finish that line normally - more events may follow)
 			continue;
 		}
 		break;
@@ -1837,7 +1837,7 @@ REI_LINE_FN(27) static INT32 m107_run_main_span(INT32 l, INT32 e)
 	return last + 1;
 }
 
-// (Sound line merging, single thread) After applying line l's events, update end-of-line timers for l..l1 at once via BurnTimerUpdateSlices —
+// (Sound line merging, single thread) After applying line l's events, update end-of-line timers for l..l1 at once via BurnTimerUpdateSlices -
 // same result as stopping every line when the lines between have no events (see timer.cpp). Status events the V35 raises meanwhile get
 // src_line = the line the instruction originally ran on (first line whose end target > instruction start cycle S)
 unsigned int v25_ins_start_cycles();
@@ -1881,7 +1881,7 @@ static void m107_run_sound_line(INT32 l, INT32 l1 = -1)
 			return;
 	}
 	if (l == 0) v25_new_frame();
-	REI_PROF_BEGIN(sline); // (profile: whole sound line — V35 run, timers, events, in the "v35" slot)
+	REI_PROF_BEGIN(sline); // (profile: whole sound line - V35 run, timers, events, in the "v35" slot)
 	VezOpen(1);
 	for (;;) {
 		UINT32 r = m107_m2s_r;
@@ -1909,7 +1909,7 @@ static void m107_run_sound_line(INT32 l, INT32 l1 = -1)
 		M107_STORE(m107_m2s_r, r + 1);
 	}
 	if (sound_cpu_reset) {
-		INT32 idle = m107_target35(l1) - VezTotalCycles(); // (lines between are VezIdle only — same in one go)
+		INT32 idle = m107_target35(l1) - VezTotalCycles(); // (lines between are VezIdle only - same in one go)
 		if (idle > 0) VezIdle(idle);
 	} else if (l1 == M107_LINES - 1) {
 		BurnTimerEndFrame(m107_total35);
@@ -1941,7 +1941,7 @@ static void m107_sound_end(INT16 *out, INT32 len)
 REI_LINE_FN(29) static INT32 m107PipelinedFrame()
 {
 #if !defined(__psp__)
-	{ // (harness check: REI_M107_NOSPAN runs per line — hashes must match)
+	{ // (harness check: REI_M107_NOSPAN runs per line - hashes must match)
 		static int chk;
 		if (!chk) { chk = 1; if (getenv("REI_M107_NOSPAN")) rei_m107_span_enabled = 0; }
 	}
@@ -2000,7 +2000,7 @@ extern "C" void rei_m107_sound_frame(INT16 *out, INT32 len)
 	for (INT32 l = 0; l < M107_LINES; ) {
 		INT32 l1 = l;
 #ifndef REI_NO_M107_SNDMERGE
-		// (Threaded mode also merges lines like single thread: if main already finished them and no events lie between — main queued
+		// (Threaded mode also merges lines like single thread: if main already finished them and no events lie between - main queued
 		//  all their events while running them. Not splitting V35 per line lets auto-idle skip (PSP sound on ME: per-line splits overran the ME). Same result)
 		{
 			const INT64 done = M107_LOAD(m107_main_done);

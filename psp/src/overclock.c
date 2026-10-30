@@ -169,7 +169,7 @@ static int oc_kernel(void)
 	return (int)(oc_num(mhz) * OC_BASE_MHZ / OC_DEN);
 }
 
-// Diagnostic: time (us) of the same loop and of 30 vblanks — did the clock really rise, are system timer/display period unchanged
+// Diagnostic: time (us) of the same loop and of 30 vblanks - did the clock really rise, are system timer/display period unchanged
 static void oc_probe(unsigned int *loop_us, unsigned int *vb_us)
 {
 	unsigned int t0 = sceKernelGetSystemTimeLow();

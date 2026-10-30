@@ -25,6 +25,7 @@ enum {
 	REI_IN_P4_LEFT, REI_IN_P4_RIGHT, REI_IN_P4_B1, REI_IN_P4_B2,
 	REI_IN_RESET, REI_IN_SERVICE,
 	REI_IN_P1_B3, REI_IN_P1_B4, REI_IN_P1_B5, REI_IN_P1_B6, // games with 3+ buttons (Perfect Soldiers has 6)
+	REI_IN_P2_B3, REI_IN_P2_B4, REI_IN_P2_B5, REI_IN_P2_B6,
 	REI_IN_DIGITAL_COUNT
 };
 // 1P button count of the current game (largest N of "P1 Button N" in the driver list, max 6)

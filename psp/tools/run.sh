@@ -136,7 +136,7 @@ done
 sleep 0.5
 
 if [ "${PSP_HWPROF:-0}" = "1" ]; then
-	# Open hardware registers, enable perf counters (for app REI_HWPROF builds). Not reloaded if already loaded — reloading every run
+	# Open hardware registers, enable perf counters (for app REI_HWPROF builds). Not reloaded if already loaded - reloading every run
 	# piled up 30 copies, ran out of memory, and the next run could not open the ROM, stuck on "Init failed" (2026-10-13)
 	if ! psh "modlist" | grep -q "Name: nbbkprof"; then
 		psh "ldstart host0:/devstub/nbbkprof.prx" >/dev/null || true

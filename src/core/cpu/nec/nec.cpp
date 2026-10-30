@@ -151,7 +151,7 @@ UINT32 rei_nec_pure_ports;
 UINT8 *rei_nec_port_shadow;
 static inline UINT32 rei_port_fx(UINT32 a, UINT32 bits) { return (a < 31 && ((rei_nec_pure_ports >> a) & bits) == bits) ? 0 : 1; }
 // While one loop iteration is checked (rei_rec), mapped memory reads and all writes are logged: a loop may write
-// memory only as counters (read-modify-write of the same address, not read elsewhere in the loop) — the idle counters
+// memory only as counters (read-modify-write of the same address, not read elsewhere in the loop) - the idle counters
 // of Irem games ("inc word [x]" while waiting for an interrupt flag)
 #define REI_REC_MAX 16
 static int rei_rec, rei_rec_n;
@@ -345,7 +345,7 @@ static int rei_auto_units_of(struct rei_auto_units *u)
 // Flags that matter at the loop head. When the body (head .. the backward jump) has only instructions that don't read
 // flags (a short list: mov, inc/dec, test, cmp, and/or/xor/add/sub, test1 ...), only the flags the closing jump reads
 // must repeat (their raw values: the same value each iteration means their source doesn't change). Otherwise all.
-// (In the Hunt / Gunforce: "inc word [x]; test1 word [y], b; jz" — test1 sets only ZF, SF/PF/AF keep the counter's)
+// (In the Hunt / Gunforce: "inc word [x]; test1 word [y], b; jz" - test1 sets only ZF, SF/PF/AF keep the counter's)
 enum { REI_F_S = 1, REI_F_A = 2, REI_F_O = 4, REI_F_Z = 8, REI_F_C = 16, REI_F_P = 32, REI_F_ALL = 63 };
 static int rei_auto_modrm_len(UINT32 a) // bytes after the ModRM byte (16-bit addressing)
 {

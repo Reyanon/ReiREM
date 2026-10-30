@@ -43,9 +43,25 @@ reference harness so that every optimization keeps the emulation bit-exact.
 
 ## 2. What's New
 
+### v0.1.400 (PS Vita)
+
+- Two players and external controllers: each player (1P / 2P) picks a device, the Vita itself or a controller.
+- New Controls screen: press a button to assign it, *Set all controls* in one go, L2 / R2 / L3 / R3 as keys
+  of their own, combo keys made of any two buttons, turbo per device.
+- Control settings are stored per device (Vita, DualShock 3, DualShock 4, DualSense, Xbox, Switch Pro, other), so
+  each controller keeps its own layout.
+- Input engine setting: Native, RePad (Bluetooth plugin bundled with the app) or VitaControl.
+  See [Controls and controllers](#controls-and-controllers-ps-vita).
+- Touch buttons can press a pair of keys and can be duplicated.
+- Fixed help text running out of the left edge of the menu panel.
+
+No changes on PSP in this version.
+
+### v0.1.347
+
 Changes since v0.1.279.
 
-### PS Vita
+#### PS Vita
 
 - New interface: game list with board tabs and Playable / All / Favorites filters, in-game menu, loading screen
   and six color themes (Graphite by default).
@@ -62,7 +78,7 @@ Changes since v0.1.279.
   is faster (also helps M90 and the M107 sound CPU).
 - New defaults: 4:3, smooth filter, scanlines off, FPS display off, turbo off.
 
-### PSP
+#### PSP
 
 - The same new interface as on the Vita, drawn with the GE and a bundled bitmap font (Noto Sans) made for the PSP screen.
 - Games are switched inside the app without restarting the EBOOT; ROMs load on a background thread
@@ -777,6 +793,44 @@ theme), Controls (button mapping, turbo; Vita: touch buttons), DIP switches, Che
 **Turbo.** Pick one *Turbo key* and the game button it fires (*Turbo button*), plus the speed
 (15, 10 or 7.5 presses per second). While the turbo key is held, that game button fires repeatedly.
 
+<a id="controls-and-controllers-ps-vita"></a>
+**Controls and controllers (PS Vita)**
+
+*Controls* has these rows:
+
+| Row | What it does |
+|---|---|
+| 1P Controller / 2P Controller | Opens the controls of that player. The value is the device the player uses. 2P is shown when a second device is connected. |
+| Input engine | How controllers are read: Native, RePad or VitaControl (see below). |
+| Touch controls | Touch buttons on the screen and their layout editor. |
+| Menu confirm button | Cross or Circle. |
+| Restore defaults | Default controls for every device. |
+
+A player's page has *Device* (Auto, Vita, a connected controller or None), *Analog stick to d-pad*,
+*Set all controls*, the game buttons, Coin and Start, *Turbo*, *Combo keys* and *Reset to default controls*.
+
+- To assign a key, select its row, press Cross (or Circle), then press the button you want. The d-pad, the PS button
+  or 5 seconds without input cancel. Left / right still step through the values, Square sets the row to None.
+- *Set all controls* asks for every row in order, from the first button to Start.
+- L2, R2, L3 and R3 of a controller are keys of their own.
+- *Combo keys*: one button presses two others together. Any two of Square, Triangle, Cross, Circle, L, R, L2, R2, L3
+  and R3 can be paired; pick the first key, then the second. Square clears a combo.
+- Controls belong to the device, not to the player: the Vita, a DualShock 4 and a Switch Pro controller each keep
+  their own layout, whichever player uses them. Per-game settings store them the same way.
+- When a player's controller is switched off, the player uses a free device until it comes back.
+  Devices that connect or disconnect while the menu is open show up within half a second.
+
+*Input engine*:
+
+- **Native** (default): the system's own controller support and any controller plugin you already use.
+  This is the right choice in most cases.
+- **RePad**: use this for Bluetooth controllers the Vita does not support by itself, such as the Nintendo Switch Pro
+  controller and other unofficial pads (DualShock 4 and DualSense work too). RePad is a kernel plugin bundled with the
+  app and loaded by it; nothing has to be added to the plugin list. With RePad the Vita's own controls are 1P and the
+  controller is 2P.
+- **VitaControl**: offered when the VitaControl plugin is in your plugin list. Enough if you only play alone (1P);
+  the app may ask to restart the Vita when that plugin has to be switched on.
+
 **Per-game settings.** *Save game settings* stores the current display and control settings for the running
 set only (`<set>_game.cfg`); global settings are not touched. When a per-game file exists it is loaded
 automatically, and the menu shows *Delete game settings* instead.
@@ -865,6 +919,7 @@ bundled with commercial products. The original copyright headers are kept in all
 - [stb_image](https://github.com/nothings/stb) (public domain), [zlib](https://zlib.net/).
 - [Mbed TLS](https://github.com/Mbed-TLS/mbedtls) (Apache 2.0) for the Vita update check.
 - [Noto Sans](https://fonts.google.com/noto) (SIL Open Font License 1.1, `psp/font/OFL.txt`) for the PSP menu font.
+- RePad (MIT, `vita/repad/`): the Bluetooth controller plugin bundled with the Vita version.
 
 **Trademarks.** Irem and all game titles are trademarks of their respective owners. This project is not
 affiliated with or endorsed by Irem Software Engineering or any rights holder. No ROM images, game

@@ -1,4 +1,4 @@
-// nbblaunch — kernel module that starts REIREM DEV from the XMB (loaded via PSPLink by psp/tools/run.sh).
+// nbblaunch - kernel module that starts REIREM DEV from the XMB (loaded via PSPLink by psp/tools/run.sh).
 // PSPLink modexec does not work from this CFW's XMB, so call SystemControl's
 // sctrlKernelLoadExecVSHMs2 (Memory Stick) / Ef2 (PSP go internal) directly, as the XMB does for homebrew.
 #include <pspiofilemgr.h>

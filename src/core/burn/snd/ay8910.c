@@ -1032,7 +1032,7 @@ void AY8910Scan(INT32 nAction, INT32* pnMin)
 	}
 }
 
-// (ReiREM: volume multiply uses rei_dmul — same result as double, in integer. On PSP double is software and was called dozens of times per sample)
+// (ReiREM: volume multiply uses rei_dmul - same result as double, in integer. On PSP double is software and was called dozens of times per sample)
 #define AY8910_ADD_SOUND(route, output)												\
 	if ((AY8910RouteDirs[route] & BURN_SND_ROUTE_LEFT) == BURN_SND_ROUTE_LEFT) {	\
 		nLeftSample += rei_dmul(output[n], &rei_ay_vol[route]);						\
@@ -1110,7 +1110,7 @@ void AY8910Render(INT16* dest, INT32 length)
 
 		{
 			// get rid of dc offset
-			// (ReiREM: same value as the double expression, in integer — rei_dmul_add)
+			// (ReiREM: same value as the double expression, in integer - rei_dmul_add)
 			INT16 outr = rei_dmul_add(nRightSample - ay_lastin_r, ay_lastout_r, &rei_ay_dc);
 			INT16 outl = rei_dmul_add(nLeftSample - ay_lastin_l, ay_lastout_l, &rei_ay_dc);
 

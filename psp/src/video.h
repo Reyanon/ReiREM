@@ -52,7 +52,7 @@ void video_set_game_index(const uint16_t *idx, const uint16_t *clut, int nclut, 
 // list = layer list built by the ME (CALL), res = that buffer's result
 void video_set_game_gem(const uint16_t *a, const uint16_t *b, const uint16_t *clut, const uint32_t *list, const gem_result *res,
 			int w, int h, int flags);
-void video_gem_cluts(uint32_t out[2]); // layer CLUT addresses: [0] transparent (color 0 alpha 0), [1] opaque — 2048 entries 5551
+void video_gem_cluts(uint32_t out[2]); // layer CLUT addresses: [0] transparent (color 0 alpha 0), [1] opaque - 2048 entries 5551
 int video_gem_atlas_init(const rei_tile_info *ti); // M107 GE mode atlas (T4). 0 = success
 // M72-family GE mode (ge_m72.c): build atlases (T4) for both layers, their GE addresses into out. 0 = success
 int video_gm72_atlas_init(const uint8_t *const gfx[2], const int ntiles[2], uint32_t out[2]);

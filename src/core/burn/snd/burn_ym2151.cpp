@@ -120,7 +120,7 @@ static inline INT32 rei_ym_immediate(INT32 reg)
 
 #if !defined(__psp__) && !defined(REI_YM_LAZY)
 // ReiREM (Vita/harness, other boards): YM2151 synthesis on a worker thread (CPU1). Main queues synth register writes with sample positions
-// into a ring (timer registers 0x10-0x14 are written by main directly — no overlap with synth state); the worker, in the same order,
+// into a ring (timer registers 0x10-0x14 are written by main directly - no overlap with synth state); the worker, in the same order,
 // does "synthesize up to that position → write". At frame end main waits for the worker to finish synthesis, then resamples.
 // Same synthesis order/positions, so identical results. CSM (timer A key-on) interferes with synthesis; once enabled the worker is no longer used
 #define REI_YM_THREAD 1
@@ -161,7 +161,7 @@ extern "C" void BurnYM2151WorkerRun(void)
 			YM2151WriteReg(e->chip, e->reg, e->val);
 		else if (e->kind == 1)
 			__atomic_store_n(&rei_ymt_done, (UINT32)e->reg << 8 | e->val, __ATOMIC_RELEASE);
-		// (kind 2: synthesis only — timer write slot)
+		// (kind 2: synthesis only - timer write slot)
 		__atomic_store_n(&rei_ymt_r, r + 1, __ATOMIC_RELEASE);
 	}
 }
@@ -179,7 +179,7 @@ extern "C" void BurnYM2151WorkerEnable(int on)
 // Main's chip takes every register write and keeps handling timers/status/ports, but does not synthesize. The ME, with a chip copy
 // (ym2151_main.c), repeats "synthesize → write" at the same positions/lengths main used to (timer registers only
 // split the synthesis), and at frame end yields the resampled YM share as before. Main leaves the YM share at 0 at frame end, takes the other
-// chips (DAC, GA20 — additive), then at the next frame end adds the ME's YM share on top: clip(YM + rest), same as the original
+// chips (DAC, GA20 - additive), then at the next frame end adds the ME's YM share on top: clip(YM + rest), same as the original
 // (as long as the other chips' sum fits in 16 bits). Overwrite mode (bAdd 0), one timer-mode chip only. Main takes over when CSM is enabled
 extern "C" volatile int rei_stop;
 extern "C" int rei_ym_copy_init(int clock, int rate);
@@ -243,7 +243,7 @@ static struct rei_ymm_me_t rei_ymm_me REI_RDR __attribute__((aligned(64)));
 
 extern "C" int BurnYM2151MePoll(void);
 extern "C" int rei_ym_me_inline = 0; // (PC harness) main processes directly instead of the ME when it would wait
-// If the ME stops responding (~0.5 s), main takes synthesis back — sound is briefly wrong but game/menu/HOME keep running
+// If the ME stops responding (~0.5 s), main takes synthesis back - sound is briefly wrong but game/menu/HOME keep running
 #define REI_YMM_SPIN_MAX 2000000u
 static int rei_ymm_on;
 static void rei_ymm_give_up(void); // (after rei_ymm_marks below)
@@ -354,7 +354,7 @@ extern "C" int BurnYM2151MePoll(void)
 			UINT8 *x = (UINT8 *)REI_UNCACHED(rei_ymm_xfer);
 			nbbm_YM2151StateGet(0, (void *)x); // (directly via uncached)
 			const INT32 sz = (nbbm_YM2151StateSize() + 63) & ~63; // (same as rei_ymm_xfer_off)
-			const INT32 n = 4 + m->pos > 64 ? 4 + m->pos : 64; // (states hold the first 64 — keep the remaining values identical too)
+			const INT32 n = 4 + m->pos > 64 ? 4 + m->pos : 64; // (states hold the first 64 - keep the remaining values identical too)
 			memcpy(x + sz, m->buf[0], n * sizeof(INT16));
 			memcpy(x + sz + REI_YMM_CARRY * sizeof(INT16), m->buf[1], n * sizeof(INT16));
 			REI_YMM_STORE(rei_ymm_done, REI_YMM_LOAD(rei_ymm_done) + 1);
@@ -402,9 +402,9 @@ static void YM2151Render(INT32 nSegmentLength)
 
 #ifdef REI_YM_ME
 	if (rei_ymm_on && rei_ymm_mmask && rei_ymm_mp_pos + nSegmentLength > REI_YMM_MP_LEN)
-		rei_ymm_takeover(); // (out of frame slots — consecutive frames with no sound output: main takes over everything)
+		rei_ymm_takeover(); // (out of frame slots - consecutive frames with no sound output: main takes over everything)
 	if (rei_ymm_on) { // (the ME synthesizes at the same positions/lengths)
-		if (rei_ymm_mmask) { // (channel split: main share as partial sums — UpdateOne also counts unbuffered chip timers like TimersOnly)
+		if (rei_ymm_mmask) { // (channel split: main share as partial sums - UpdateOne also counts unbuffered chip timers like TimersOnly)
 			INT16 *bufs[2] = { pBuffer + 0 * 4096 + 4 + nYM2151Position, pBuffer + 1 * 4096 + 4 + nYM2151Position }; // (not written)
 			const UINT32 s = rei_ymm_mp_slot, p = rei_ymm_mp_pos;
 			YM2151SetChannelMask(rei_ymm_mmask);
@@ -414,7 +414,7 @@ static void YM2151Render(INT32 nSegmentLength)
 			rei_ymm_put(REI_YMM_RENDER, nYM2151Position, nSegmentLength, (UINT8)(0x80 | s), rei_ymm_mmask, (INT32)p);
 			rei_ymm_mp_pos += nSegmentLength;
 		} else {
-			if (!bBurnYM2151IsBuffered) YM2151TimersOnly(0, nSegmentLength); // (unbuffered: chip timers are counted in synth calls — main does timers only)
+			if (!bBurnYM2151IsBuffered) YM2151TimersOnly(0, nSegmentLength); // (unbuffered: chip timers are counted in synth calls - main does timers only)
 			rei_ymm_put(REI_YMM_RENDER, nYM2151Position, nSegmentLength, 0, 0);
 		}
 		nYM2151Position += nSegmentLength;
@@ -577,7 +577,7 @@ void BurnYM2151Render(INT16* pSoundBuf, INT32 nSegmentEnd)
 			nTotalRightSample[chip] = INTERPOLATE4PS_16BIT((nFractionalPosition >> 4) & 0x0fff, nRightSample[chip][0], nRightSample[chip][1], nRightSample[chip][2], nRightSample[chip][3]);
 
 			const INT32 k1 = YM2151VolK[chip][BURN_SND_YM2151_YM2151_ROUTE_1], k2 = YM2151VolK[chip][BURN_SND_YM2151_YM2151_ROUTE_2];
-			// (non-k/5 volume: rei_dmul — same value as the double multiply. clip-then-truncate = truncate-then-clip)
+			// (non-k/5 volume: rei_dmul - same value as the double multiply. clip-then-truncate = truncate-then-clip)
 			if (k1 >= 0) nTotalLeftSample[chip] = BURN_SND_CLIP((nTotalLeftSample[chip] * k1) / 5);
 			else { const INT32 v = rei_dmul(nTotalLeftSample[chip], &rei_ym_vol[chip][BURN_SND_YM2151_YM2151_ROUTE_1]); nTotalLeftSample[chip] = BURN_SND_CLIP(v); }
 			if (k2 >= 0) nTotalRightSample[chip] = BURN_SND_CLIP((nTotalRightSample[chip] * k2) / 5);
@@ -641,7 +641,7 @@ extern "C" int BurnYM2151SplitInit(UINT8 main_mask)
 #ifdef REI_YM_ME
 extern "C" int BurnYM2151MeSupported(void)
 {
-	// Buffered mode uses BurnTimer chips; unbuffered (M90: render per segment) uses in-chip timers — counted by main via YM2151TimersOnly
+	// Buffered mode uses BurnTimer chips; unbuffered (M90: render per segment) uses in-chip timers - counted by main via YM2151TimersOnly
 	return DebugSnd_YM2151Initted && (bBurnYM2151IsBuffered ? YM2151BurnTimer : !YM2151BurnTimer) && !bYM2151_MultiChip &&
 		!bYM2151AddSignal && pBuffer && nBurnSoundLen > 0 && nBurnSoundLen * 2 <= REI_YMM_MAXLEN;
 }
@@ -649,12 +649,12 @@ extern "C" int BurnYM2151MeSupported(void)
 static INT32 rei_ymm_xfer_size(void) { return ((YM2151StateSize() + 63) & ~63) + 2 * REI_YMM_CARRY * (INT32)sizeof(INT16); }
 static INT32 rei_ymm_xfer_off(void) { return (YM2151StateSize() + 63) & ~63; }
 
-// Enable: before the ME runs (main fills ME-side state — the frontend flushes the data cache when starting the ME). 0 on success
+// Enable: before the ME runs (main fills ME-side state - the frontend flushes the data cache when starting the ME). 0 on success
 // Disable: after the ME stops (synthesis state is discarded: only when quitting the game)
 extern "C" int BurnYM2151MeEnable(int on)
 {
 	if (rei_ymm_on && on) return 0;
-	if (rei_ymm_mmask) { // (end channel split — main chip synthesizes everything when enabling/disabling)
+	if (rei_ymm_mmask) { // (end channel split - main chip synthesizes everything when enabling/disabling)
 		rei_ymm_mmask = 0;
 		YM2151SetChannelMask(0xff);
 		YM2151SetPartialOut(NULL, NULL);
@@ -704,7 +704,7 @@ static void rei_ymm_pull(void)
 	rei_ymm_put(REI_YMM_OUT, 0, 0, 0, 0);
 	if (!rei_ymm_on || !rei_ymm_wait(++rei_ymm_marks)) return;
 	const UINT8 *x = (const UINT8 *)REI_UNCACHED(rei_ymm_xfer);
-	if (rei_ymm_mmask) { // (channel split: main channels are correct on main — those channels in the ME copy were frozen)
+	if (rei_ymm_mmask) { // (channel split: main channels are correct on main - those channels in the ME copy were frozen)
 		static UINT8 *own;
 		if (!own) own = (UINT8 *)BurnMalloc(YM2151StateSize());
 		if (!own) { rei_ymm_give_up(); return; }
@@ -740,16 +740,16 @@ static void rei_ymm_takeover(void)
 	rei_ymm_pull();
 	rei_ymm_on = 0;
 	rei_ymm_have = 0;
-	if (rei_ymm_mmask) { // (main chip owns everything again — the pull above fetched the ME channels)
+	if (rei_ymm_mmask) { // (main chip owns everything again - the pull above fetched the ME channels)
 		rei_ymm_mmask = 0;
 		YM2151SetChannelMask(0xff);
 		YM2151SetPartialOut(NULL, NULL);
 	}
 }
 
-// Main: switch to channel-split synthesis (when the ME overruns — decided by the frontend, between frames). mask = channels for main. 0 on success.
+// Main: switch to channel-split synthesis (when the ME overruns - decided by the frontend, between frames). mask = channels for main. 0 on success.
 // Fetch ME state into the main chip (main channels kept), align the newly taken channels, then split (sound continues).
-// Main's share only grows — shrinking would need sending main channels to the ME (not done)
+// Main's share only grows - shrinking would need sending main channels to the ME (not done)
 extern "C" int BurnYM2151MeSplit(UINT8 mask)
 {
 	if (!rei_ymm_on || mask == 0xff || mask == rei_ymm_mmask) return 1;
@@ -761,7 +761,7 @@ extern "C" int BurnYM2151MeSplit(UINT8 mask)
 		rei_ymm_put(REI_YMM_CHIN, 0, 0, 0, give);
 		if (!rei_ymm_on || !rei_ymm_wait(++rei_ymm_marks)) return 1;
 		rei_ymm_mmask = mask;
-		if (!mask) { // (back to all on the ME — main chip does timers only)
+		if (!mask) { // (back to all on the ME - main chip does timers only)
 			YM2151SetChannelMask(0xff);
 			YM2151SetPartialOut(NULL, NULL);
 		}
@@ -776,7 +776,7 @@ extern "C" int BurnYM2151MeSplit(UINT8 mask)
 }
 extern "C" int BurnYM2151MeSplitMask(void) { return rei_ymm_on ? rei_ymm_mmask : -1; }
 
-// Main: main synthesizes from now on (when the ME overruns — decided by the frontend). Call between frames. One frame of sound is lost
+// Main: main synthesizes from now on (when the ME overruns - decided by the frontend). Call between frames. One frame of sound is lost
 extern "C" void BurnYM2151MeRelease(void)
 {
 	if (rei_ymm_on) rei_ymm_takeover();
@@ -790,7 +790,7 @@ extern "C" void BurnYM2151MeFrameEnd(INT16 *audio, INT32 len)
 		return;
 	}
 	rei_ymm_posted = 0;
-	rei_ymm_put(REI_YMM_FRAME, 0, 0, 0, 0); // (after this frame's segments — finish count +1 when the ME gets here)
+	rei_ymm_put(REI_YMM_FRAME, 0, 0, 0, 0); // (after this frame's segments - finish count +1 when the ME gets here)
 	rei_ymm_marks++;
 	rei_ymm_mp_slot = (rei_ymm_mp_slot + 1) % REI_YMM_MP_SLOTS; // (channel split: next frame's main partial-sum slot)
 	rei_ymm_mp_pos = 0;
@@ -1109,9 +1109,9 @@ void BurnYM2151Scan(INT32 nAction, INT32 *pnMin)
 	if (rei_ymm_on && (nAction & ACB_WRITE)) rei_ymm_push(); // (loaded: ME copy too)
 #endif
 #ifdef REI_YM_SPLIT
-	if (rei_ym_split_on && (nAction & ACB_WRITE)) { // (loaded: main-share copy to this chip state/buffer position — so old instruments don't linger)
+	if (rei_ym_split_on && (nAction & ACB_WRITE)) { // (loaded: main-share copy to this chip state/buffer position - so old instruments don't linger)
 		static UINT8 *st;
-		if (!st) st = (UINT8 *)malloc(YM2151StateSize()); // (survives game switches — BurnMalloc is freed on exit)
+		if (!st) st = (UINT8 *)malloc(YM2151StateSize()); // (survives game switches - BurnMalloc is freed on exit)
 		if (st) {
 			YM2151StateGet(0, st);
 			rei_ym_main_resync(st, nYM2151Position);
@@ -1153,7 +1153,7 @@ void BurnYM2151Write(INT32 chip, INT32 offset, const UINT8 nData)
 				rei_ymt_drain();
 				rei_ymt_on = 0;
 			} else if (reg == 0x10 || reg == 0x11 || reg == 0x12 || reg == 0x14) {
-				// Timers: main writes directly (no overlap with synth state). Synthesis is still split once at this position as before —
+				// Timers: main writes directly (no overlap with synth state). Synthesis is still split once at this position as before -
 				// the split point changes synthesis results (silent-channel skipping etc., measured)
 				rei_ymt_put(2, BurnYM2151StreamCallback(nBurnYM2151SoundRate), 0, 0, 0);
 				YM2151WriteReg(chip, reg, nData);

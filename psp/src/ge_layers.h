@@ -1,4 +1,4 @@
-// Tile layers -> GE draw lists (psp/docs/M92_VIDEO.md G2). Platform-independent C — shared by the PSP renderer and the PC model
+// Tile layers -> GE draw lists (psp/docs/M92_VIDEO.md G2). Platform-independent C - shared by the PSP renderer and the PC model
 // (psp/tools/ge_model).
 //
 // Takes the core's segment callback (rei_layer_seg) and builds a "run" list. Run = one layer's 8x8 tiles clipped to screen lines

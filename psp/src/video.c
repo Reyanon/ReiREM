@@ -58,7 +58,7 @@
 #define SCISSOR_GAME() sceGuScissor(0, 0, GAME_W, GAME_H)
 
 #define LIST_WORDS 0x40000 // 1MB. Line-scroll frames exceed 20k tiles
-// (64-byte aligned: sceGu writes the list via uncached addresses — sharing a cache line with another global (e.g. g_list_cur just before)
+// (64-byte aligned: sceGu writes the list via uncached addresses - sharing a cache line with another global (e.g. g_list_cur just before)
 //  meant main cache writeback overwrote the list head with stale data: broken game list screen, sprite flicker. Only showed in a build shifted by 16 bytes,
 //  2026-10-17 recurrence note 17. Size 2MB is a multiple of 64 so the end aligns too)
 static unsigned int __attribute__((aligned(64))) g_list[2][LIST_WORDS];
@@ -351,7 +351,7 @@ void video_submit(const uint16_t *index, const uint32_t *pal, int blank)
 	sceGuClear(GU_COLOR_BUFFER_BIT | GU_STENCIL_BUFFER_BIT);
 
 	if (!blank) {
-		// 1) bank number -> stencil (once per bit — bank_bits_to_stencil)
+		// 1) bank number -> stencil (once per bit - bank_bits_to_stencil)
 		sceGuTexMode(GU_PSM_5551, 0, 0, 0);
 		sceGuTexImage(0, 512, 256, GAME_W, tex);
 		sceGuTexFlush();
@@ -409,7 +409,7 @@ int video_layers_init(const rei_tile_info *ti)
 	return 0;
 }
 
-// M107 GE mode atlas: 4bpp (T4, two texels per byte — low nibble is left), 512x512 window = 128KB holds 4096 tiles. Half of T8 —
+// M107 GE mode atlas: 4bpp (T4, two texels per byte - low nibble is left), 512x512 window = 128KB holds 4096 tiles. Half of T8 -
 // dsoccr94 (130k tiles) needed 8MB with T8, leaving no memory to grow the dynarec code cache (fell back to interpreter, 35ms)
 int video_gem_atlas_init(const rei_tile_info *ti)
 {
@@ -579,13 +579,13 @@ void video_set_game_buffer(const uint16_t *buf, int w, int h, int stride, int fl
 	g_gm72_list = NULL;
 }
 
-// Other-board index mode (ME draws color indices, GE colors them via CLUT — removes the ME palette transfer, 2026-10-14):
+// Other-board index mode (ME draws color indices, GE colors them via CLUT - removes the ME palette transfer, 2026-10-14):
 // move indices to VRAM (GE copy), then as in the M92 path bank (index bit8-10) -> stencil, per-bank 256-color CLUT into the 8888 offscreen,
 // then compose that offscreen to the screen with rotation. Offscreen and index copy use the M92 offscreen area (OFF_OFF to ART_OFF)
 static int g_ext_banks, g_ext_os;
 int g_idx_nocopy; // (diag)
 int g_present_wb; // (test) video_present writes back the data cache before sending the list (host0:/rei_presentwb)
-int g_ge_skip; // (diag, wrong output) skip GE compose stages — 1 bank stencil, 2 bank color (first bank only), 4 compose, 8 offscreen clear // bank count, offscreen width (multiple of 64)
+int g_ge_skip; // (diag, wrong output) skip GE compose stages - 1 bank stencil, 2 bank color (first bank only), 4 compose, 8 offscreen clear // bank count, offscreen width (multiple of 64)
 static unsigned g_ext_idx_off;    // index copy location in VRAM
 int video_index_fits(int w, int h)
 {
@@ -607,7 +607,7 @@ void video_set_game_index(const uint16_t *idx, const uint16_t *clut, int nclut, 
 	if (g_ext_banks > 8) g_ext_banks = 8;
 	if (g_ext_banks < 1) g_ext_banks = 1;
 	g_ext_os = (w + 63) & ~63;
-	// (clear paints 480x272 regardless of scissor: if the offscreen is narrower, it reaches further — the copy goes after 272 lines + 2KB.
+	// (clear paints 480x272 regardless of scissor: if the offscreen is narrower, it reaches further - the copy goes after 272 lines + 2KB.
 	//  placed right after, the copy's top lines got cleared and cosmccop's sky was gray, 2026-10-14)
 	g_ext_idx_off = (OFF_OFF + (unsigned)g_ext_os * SCR_H * 4 + 2048 + 63) & ~63u;
 }
@@ -617,7 +617,7 @@ void video_set_game_gem(const uint16_t *a, const uint16_t *b, const uint16_t *cl
 	video_set_game_index(a, clut, 0x800, w, h, flags);
 	g_gem_list = list;
 	g_gem_b = b;
-	// (ME-written results: drop stale main cache lines before reading — main never writes this memory)
+	// (ME-written results: drop stale main cache lines before reading - main never writes this memory)
 	sceKernelDcacheInvalidateRange((void *)((uintptr_t)res & ~63u), 128);
 	g_gem_res = *res;
 }
@@ -738,7 +738,7 @@ static void ext_gem_offscreen(const void *vidx)
 		}
 		video_submit_clut(pal);
 	}
-	// (the list changes the scissor: scissor must be enabled in this context so later sceGuScissor emits commands — in a disabled context
+	// (the list changes the scissor: scissor must be enabled in this context so later sceGuScissor emits commands - in a disabled context
 	//  nothing was emitted and the list's scissor persisted into compose)
 	sceGuEnable(GU_SCISSOR_TEST);
 	sceGuDrawBufferList(GU_PSM_8888, (void *)OFF_OFF, g_ext_os);
@@ -824,7 +824,7 @@ static void ext_gm72_offscreen(void)
 	sceKernelDcacheWritebackRange(g_gm72_clut, sizeof(g_gm72_clut));
 	const uint32_t r5 = p[0] & 31, g5 = (p[0] >> 5) & 31, b5 = (p[0] >> 10) & 31;
 	const uint32_t c0 = 0xff000000u | (((b5 << 3) | (b5 >> 2)) << 16) | (((g5 << 3) | (g5 >> 2)) << 8) | ((r5 << 3) | (r5 >> 2));
-	sceGuEnable(GU_SCISSOR_TEST); // (the list changes the scissor — see ext_gem_offscreen)
+	sceGuEnable(GU_SCISSOR_TEST); // (the list changes the scissor - see ext_gem_offscreen)
 	sceGuDrawBufferList(GU_PSM_8888, (void *)OFF_OFF, g_ext_os);
 	sceGuScissor(0, 0, w, h);
 	sceGuClearColor(c0);
@@ -863,7 +863,7 @@ static void ext_index_to_offscreen(void)
 		tbw = w;
 	} else {
 		// indices -> VRAM: read as 5551 and draw into a 5551 buffer (5551 -> 8888 -> 5551 preserves values). Reading a main-RAM texture many times
-		// is slow. (sceGuCopyImage left top lines as 0 — 2026-10-14 on hardware, gray band in cosmccop's sky)
+		// is slow. (sceGuCopyImage left top lines as 0 - 2026-10-14 on hardware, gray band in cosmccop's sky)
 		sceGuDrawBufferList(GU_PSM_5551, (void *)g_ext_idx_off, g_ext_os);
 		sceGuScissor(0, 0, w, h);
 		sceGuTexMode(GU_PSM_5551, 0, 0, 0);
@@ -1037,7 +1037,7 @@ static void compose(void)
 			for (int i = 0; i < 4; i++) u[i] = uu[i], v[i] = vv[i];
 		}
 		// Split screen width into 64-texel texture strips (same reason as the M92 path's draw_stretched: stretching one rectangle made the GE
-		// sweep the main-RAM texture widely per screen line, flushing the texture cache — rtype compose 14ms, 2026-10-13 on hardware).
+		// sweep the main-RAM texture widely per screen line, flushing the texture cache - rtype compose 14ms, 2026-10-13 on hardware).
 		// One strip per 64 texels along the texture axis that varies with screen x (u for horizontal, v for vertical screens), two triangles each
 		const int T = vert ? H : W; // texels traversed along screen width
 		const int strips = (T + 63) / 64;
@@ -1086,10 +1086,10 @@ static void compose(void)
 
 #ifdef REI_LOG_ENABLED
 // (diag) host0:/rei_dcap "start count": from the start-th present for count frames, collect the GE-composited screen (565, 480x272) in memory, then
-// write host0:/dc_<n>.bin (8-byte header: vcount passed, video_dcap_tag). Investigates visible flicker — frames are not delayed while dumping
+// write host0:/dc_<n>.bin (8-byte header: vcount passed, video_dcap_tag). Investigates visible flicker - frames are not delayed while dumping
 static uint8_t *g_dci; // (diag) index copy / stencil buffer (dcap)
 static int g_dci_n;
-uint32_t video_dcap_tag; // (main: tag of the frame this present sends — ME frame number etc. Stored in the capture header)
+uint32_t video_dcap_tag; // (main: tag of the frame this present sends - ME frame number etc. Stored in the capture header)
 static void dcap(void)
 {
 	static int from = -2, n, cnt;
@@ -1199,7 +1199,7 @@ void video_present(void)
 }
 
 // G3: the GE draws sprites into the index buffer (VRAM, drawn as 5551). Drawing in reverse core order leaves the first-drawn
-// sprite on top (same result as core RenderTileS "first-claimed pixel can't be overwritten" — verified with tools/harness --ge-steps
+// sprite on top (same result as core RenderTileS "first-claimed pixel can't be overwritten" - verified with tools/harness --ge-steps
 // over 3600 frames). The CLUT maps pixel -> index value; value 0 (transparent) is discarded by color test. 5551 -> 5551 writes unchanged
 static void draw_sprite_target(const rei_spr_tile *t, int n, const uint8_t *gfx)
 {
@@ -1457,7 +1457,7 @@ static void draw_run_radix(const ge_tile *tiles, int count, int l2)
 }
 
 // Same order without sorting: per pass, count per key, split vertex slots in key order, then read tiles in order and write in place.
-// Radix sort is stable, so order within a key is tile order — GE commands are identical to draw_run_radix. Removes re-reading tiles in
+// Radix sort is stable, so order within a key is tile order - GE commands are identical to draw_run_radix. Removes re-reading tiles in
 // sorted (random) order and two sort passes (line-scroll layers have thousands of tiles, PERF PP19). With many key kinds, falls back to radix sort
 #define BUCKET_MAX 256
 static uint8_t g_key_slot[1 << 14];        // key -> slot number + 1 (only keys seen this pass, reset to 0 after)
@@ -1492,7 +1492,7 @@ static void draw_run_sorted(const ge_tile *tiles, int count, int l2)
 			g_slot_n[sl - 1]++;
 			m++;
 		}
-		if (many) { // (too many key kinds: radix sort the whole run — only if earlier passes emitted nothing yet)
+		if (many) { // (too many key kinds: radix sort the whole run - only if earlier passes emitted nothing yet)
 			for (int k = 0; k < ns; k++)
 				g_key_slot[g_slot_key[k]] = 0;
 			if (pass == 0) {
@@ -1564,7 +1564,7 @@ static void draw_run_sorted(const ge_tile *tiles, int count, int l2)
 }
 
 // Normal runs with at least this many tiles also use per-key slot assignment (8x8 tiles of one layer never overlap, order doesn't matter).
-// Default is strip runs only (PERF PP14: sorting all runs was a loss — radix sort back then)
+// Default is strip runs only (PERF PP14: sorting all runs was a loss - radix sort back then)
 #ifndef REI_PSP_SORT_MIN
 #define REI_PSP_SORT_MIN 0x7fffffff
 #endif
@@ -1582,7 +1582,7 @@ static void draw_layers(const ge_frame *fr, uint32_t pal0)
 	sceGuStencilFunc(GU_ALWAYS, 0x80, 0xff);
 	for (int r = 0; r < fr->nruns; r++) {
 		const ge_run *run = &fr->runs[r];
-		// (this pspsdk's sceGuScissor takes x, y, width, height — passing end coords left right/bottom unclipped and
+		// (this pspsdk's sceGuScissor takes x, y, width, height - passing end coords left right/bottom unclipped and
 		// a row of tiles showed outside the game area)
 		sceGuScissor(GAME_X, GAME_Y + run->y0, GAME_W, run->y1 - run->y0);
 		if (run->fill) {
@@ -1729,7 +1729,7 @@ int video_submit_list(const ge_frame *fr, const rei_spr_tile *st, int nst, const
 	sceGuFinish();
 	if (g_nvtx)
 		sceKernelDcacheWritebackRange(g_vpool, g_nvtx * sizeof(struct vtx));
-#ifndef REI_PSP_NO_GE_TEST // (diag: don't send lists to the GE — measure without GE memory bus use)
+#ifndef REI_PSP_NO_GE_TEST // (diag: don't send lists to the GE - measure without GE memory bus use)
 	sceGuSendList(GU_TAIL, list, NULL);
 #endif
 	g_sent = 1;
@@ -1750,7 +1750,7 @@ void video_sync(void)
 
 void video_flip(void)
 {
-	// If the previous flip hasn't reached the screen (second flip in the same vblank), wait for the next vblank — flipping anyway, the previous
+	// If the previous flip hasn't reached the screen (second flip in the same vblank), wait for the next vblank - flipping anyway, the previous
 	// frame is never shown (objects drawn on alternate frames vanish or look transparent), and the "draw buffer" computed below becomes the
 	// visible one, so we drew over the visible screen (black bottom lines, flicker, when catching up after late frames)
 	static uint32_t flip_vc;

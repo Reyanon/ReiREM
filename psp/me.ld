@@ -48,7 +48,7 @@ SECTIONS
 {
   .rei_me_text ALIGN(64) :
   {
-    /* (experiment: shift the whole module in cache position — CMake REI_PSP_ME_PAD, default 0) */
+    /* (experiment: shift the whole module in cache position - CMake REI_PSP_ME_PAD, default 0) */
     . += DEFINED(REI_ME_PAD) ? REI_ME_PAD : 0;
     *librei_core.a:v25.cpp.obj(.text .text.*)
     *librei_core.a:ym2151.c.obj(.text .text.*)
@@ -81,7 +81,7 @@ SECTIONS
     . = ALIGN(64);
     *(.reifast_text)
     . = ALIGN(64);
-    /* Other boards: sound Z80 interpreter and hot drivers also get fixed slots — placed last so the M92 layout above stays. Each layout change
+    /* Other boards: sound Z80 interpreter and hot drivers also get fixed slots - placed last so the M92 layout above stays. Each layout change
      * shifted I-cache conflicts, ±2ms jitter (PSP PP28) */
     *librei_core.a:z80.cpp.obj(.text .text.*)
     *librei_core.a:z80_intf.cpp.obj(.text .text.*)

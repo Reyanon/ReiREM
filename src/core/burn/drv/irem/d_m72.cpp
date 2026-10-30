@@ -81,12 +81,12 @@ static INT32 graphics_length[4];
 static INT32 video_offsets[2] = { 0, 0 };
 
 static INT32 use_mcu = 0;
-// (ReiREM: batched run — defined before DrvFrame below)
+// (ReiREM: batched run - defined before DrvFrame below)
 enum { M72B_LATCH, M72B_PORT02, M72B_SAMPLE, M72B_RAM };
 static INT32 m72b_push(INT32 type, UINT16 addr, UINT8 data);
 extern "C" void rei_m72_z80_worker_enable(int on);
 static INT32 m72b_v35;
-static void m72b_raster_written(); // (ReiREM: V35 boards — the batched run reads the instruction position from the v25 core)
+static void m72b_raster_written(); // (ReiREM: V35 boards - the batched run reads the instruction position from the v25 core)
 static UINT8 m72b_ram_read(UINT32 address);
 static void m72b_ram_write(UINT32 address, UINT8 data);
 static INT32 m72b_z80_ram_handler; // V30 0xe0000~0xeffff is a handler (common_main_cpu_map)
@@ -853,7 +853,7 @@ static void protection_sample_offset_write(UINT8 data) // 0xc0
 		return;
 	}
 
-	if (m72b_push(M72B_SAMPLE, 0, data)) return; // (ReiREM: in a batched run, queued before the Z80 slice — sample playback is on the Z80 side)
+	if (m72b_push(M72B_SAMPLE, 0, data)) return; // (ReiREM: in a batched run, queued before the Z80 slice - sample playback is on the Z80 side)
 
 	if (protection_sample_offsets != NULL) {
 		if (data < protection_sample_offsets[0]) {
@@ -974,7 +974,7 @@ static UINT8 __fastcall m72_main_read(UINT32 address)
 		return protection_read(address);
 	}
 
-	if ((address & 0xf0000) == 0xe0000 && m72b_z80_ram_handler) { // (ReiREM: Z80 RAM — in a batched run, catch up the Z80 first)
+	if ((address & 0xf0000) == 0xe0000 && m72b_z80_ram_handler) { // (ReiREM: Z80 RAM - in a batched run, catch up the Z80 first)
 		return m72b_ram_read(address);
 	}
 
@@ -988,7 +988,7 @@ static void __fastcall m72_main_write(UINT32 address, UINT8 data)
 		return;
 	}
 
-	if ((address & 0xf0000) == 0xe0000 && m72b_z80_ram_handler) { // (ReiREM: Z80 RAM — in a batched run, queue it)
+	if ((address & 0xf0000) == 0xe0000 && m72b_z80_ram_handler) { // (ReiREM: Z80 RAM - in a batched run, queue it)
 		m72b_ram_write(address, data);
 		return;
 	}
@@ -1362,7 +1362,7 @@ static void common_main_cpu_map(INT32 romaddr, INT32 ramaddr)
 	VezMapArea(0xd8000, 0xdbfff, 0, DrvVidRAM1);
 	VezMapArea(0xd8000, 0xdbfff, 1, DrvVidRAM1);
 	VezMapArea(0xd8000, 0xdbfff, 2, DrvVidRAM1);
-	// (ReiREM: Z80 RAM via handlers — the batched run syncs V30 reads/writes to Z80 progress, m72_main_read/write)
+	// (ReiREM: Z80 RAM via handlers - the batched run syncs V30 reads/writes to Z80 progress, m72_main_read/write)
 	VezMemCallback(0xe0000, 0xeffff, 0);
 	VezMemCallback(0xe0000, 0xeffff, 1);
 	VezMemCallback(0xe0000, 0xeffff, 2);
@@ -1724,7 +1724,7 @@ static INT32 MemIndex()
 
 
 static void m72_defer_register(); // (ReiREM: deferred-draw registration, next to dodrawline below)
-static INT32 rei_m72_active; // (ReiREM: this driver is running — rei_m72_get_tiles)
+static INT32 rei_m72_active; // (ReiREM: this driver is running - rei_m72_get_tiles)
 
 static INT32 DrvInit(void (*pCPUMapCallback)(), void (*pSNDMapCallback)(), INT32 (*pRomLoadCallback)(), INT32 z80_nmi, INT32 video_type, INT32 video_mask)
 {
@@ -1739,7 +1739,7 @@ static INT32 DrvInit(void (*pCPUMapCallback)(), void (*pSNDMapCallback)(), INT32
 	if (GetRoms(1)) return 1;
 
 	m72b_z80_ram_handler = 0; // (ReiREM: set by common_main_cpu_map)
-	{ // (ReiREM: ports 0-5 = input/DIP — change only between frames. V30 loops waiting on them also auto-idle, nec.cpp)
+	{ // (ReiREM: ports 0-5 = input/DIP - change only between frames. V30 loops waiting on them also auto-idle, nec.cpp)
 		extern UINT32 rei_nec_pure_ports;
 		rei_nec_pure_ports = 0x3f;
 	}
@@ -1887,14 +1887,14 @@ static void rd_live()
 }
 
 #if !defined(REI_ORIGINAL_DRAW) && !defined(__ARM_NEON)
-// (ReiREM PSP: set of pens used per tile — 64 pixels, bit = pen. Tested against the pass's transparency mask to skip the tile or write without tests.
+// (ReiREM PSP: set of pens used per tile - 64 pixels, bit = pen. Tested against the pass's transparency mask to skip the tile or write without tests.
 //  Most layer draw time went into checking pens per row: about 7M cycles per frame for xmultipl on PSP)
 static UINT16 *rei_tpens[2];
 static const UINT8 *rei_tpens_gfx[2];
 static const UINT16 *rei_tile_pens(INT32 layer, const UINT8 *gfx, INT32 ntiles)
 {
 	if (rei_tpens_gfx[layer] != gfx) {
-		if (rei_render_noalloc) return NULL; // (PSP ME render: draw without the table — normally m72_prepare builds it in advance)
+		if (rei_render_noalloc) return NULL; // (PSP ME render: draw without the table - normally m72_prepare builds it in advance)
 		BurnFree(rei_tpens[layer]);
 		rei_tpens_gfx[layer] = NULL;
 		rei_tpens[layer] = (UINT16 *)BurnMalloc(ntiles * sizeof(UINT16));
@@ -1946,7 +1946,7 @@ static void draw_layer(INT32 layer, INT32 forcelayer, INT32 type, INT32 start, I
 	UINT16 *xscroll = (UINT16*)rdRowScroll;
 
 #if !defined(REI_ORIGINAL_DRAW) && !defined(__ARM_NEON)
-	// (ReiREM PSP: without row scroll, draw each tile row (8 lines) per cell — no per-line cell attribute math.
+	// (ReiREM PSP: without row scroll, draw each tile row (8 lines) per cell - no per-line cell attribute math.
 	//  Cells within one pass do not overlap, so draw order does not change the result. Passes with transparent pen 0 skip empty rows)
 	if (!(rdMajtitleRowscroll && type == 3 && layer == 1)) {
 		const INT32 wide = (type == 3 && layer == 1);
@@ -2078,7 +2078,7 @@ static void draw_layer(INT32 layer, INT32 forcelayer, INT32 type, INT32 start, I
 
 			INT32 mask = transmask[layer][prio][forcelayer];
 #ifndef REI_ORIGINAL_DRAW
-			// (ReiREM, Vita/PSP: this cell draws no pixels in this pass — same result as the original code)
+			// (ReiREM, Vita/PSP: this cell draws no pixels in this pass - same result as the original code)
 			if (mask == 0xffff) continue;
 #endif
 
@@ -2101,7 +2101,7 @@ static void draw_layer(INT32 layer, INT32 forcelayer, INT32 type, INT32 start, I
 				if (xx >= 0 && xx + 8 <= nScreenWidth) { // (whole cell on screen: no per-pixel range test, same result)
 					UINT16 *d = dest + xx;
 #ifdef __ARM_NEON
-					// (Vita: 8 pixels at once — vtbl lookup into a 16-entry per-pen draw table built from the mask. Same result)
+					// (Vita: 8 pixels at once - vtbl lookup into a 16-entry per-pen draw table built from the mask. Same result)
 #ifdef REI_NEON_VERIFY
 					UINT16 want[8];
 					for (INT32 x = 0; x < 8; x++) { INT32 pxl = rom[x ^ x_xor]; want[x] = (mask & (1 << pxl)) ? d[x] : (UINT16)(pxl | color); }
@@ -2155,7 +2155,7 @@ static void draw_layer(INT32 layer, INT32 forcelayer, INT32 type, INT32 start, I
 
 #if !defined(REI_ORIGINAL_DRAW) && !defined(__ARM_NEON)
 // (ReiREM PSP: same result as Draw16x16MaskTile (pen 0 transparent, 4-bit, palette offset 0). The generic function rereads global pTileData
-//  per pixel (-fno-strict-aliasing) and checks clipping per pixel — after the kengo boss, a big explosion sprite covering the screen pushed
+//  per pixel (-fno-strict-aliasing) and checks clipping per pixel - after the kengo boss, a big explosion sprite covering the screen pushed
 //  ME drawing past a frame and main waited 6ms each (reported 2026-10-17). Clip row/column ranges to the clip rect first, skip all-transparent
 //  rows, write all-opaque rows without tests)
 static inline UINT32 m72_has_zero(UINT32 w) { return (w - 0x01010101u) & ~w & 0x80808080u; }
@@ -2317,7 +2317,7 @@ extern "C" UINT32 rei_defer_skip[16];
 
 #if !defined(REI_ORIGINAL_DRAW) && !defined(__ARM_NEON)
 // (ReiREM) Tile layer GE mode (rei_m72ge.h): ops chosen by the frontend (set by main before starting the ME, render only reads).
-// The sprite buffer pointer is written by render every frame — REI_RDR (no cache lines shared with main variables)
+// The sprite buffer pointer is written by render every frame - REI_RDR (no cache lines shared with main variables)
 #include "rei_m72ge.h"
 #define M72_GE 1
 static const rei_m72_ge_ops *m72_ge;
@@ -2386,7 +2386,7 @@ static void dodrawline_now(INT32 start, INT32 finish)
 {
 	if (*rdVideoDisable) return;
 #if defined(__psp__) && !defined(REI_ORIGINAL_DRAW)
-	// (diag PSP host0:/rei_rskip: skips 4 = sprites, 8 = back layer pass, 16 = front layer pass — screen will be wrong)
+	// (diag PSP host0:/rei_rskip: skips 4 = sprites, 8 = back layer pass, 16 = front layer pass - screen will be wrong)
 	const UINT32 dskip = REI_SH(rei_defer_skip[0]);
 #else
 	const UINT32 dskip = 0;
@@ -2574,7 +2574,7 @@ static void compile_inputs()
 static INT32 nPreviousLine = 0;
 
 // ---------------------------------------------------------------------------------------------------------------------
-// (ReiREM: batched run, boards without MCU) Run all V30 frame slices first, then the Z80 — removes the cache thrash cost of
+// (ReiREM: batched run, boards without MCU) Run all V30 frame slices first, then the Z80 - removes the cache thrash cost of
 // alternating CPUs (PSP ~15µs per slice, 852 slices per frame). Result matches the original order (slice i: V30 → Z80):
 // - V30 → Z80 state (sound latch/IRQ vector, Z80 reset, sample address, Z80 RAM written by V30) is queued with the slice index and applied
 //   in order before each Z80 slice.
@@ -2588,7 +2588,7 @@ static INT32 m72b_ev_slice[M72B_MAX];
 static INT32 m72b_inter, m72b_sample_int, m72b_z80_total; // slices this frame, sample interval, Z80 cycles
 static void m72_port02_z80(UINT8 data); // (m72_main_write_port below)
 // (V30 slice merging) Run slices [m72b_slice, m72b_gend) between scanline events in one VezRun. Original slice j runs instructions whose start
-// cycle is below target_j (VezRun does nothing for requests <= 0) — so an instruction's slice, for start cycle S,
+// cycle is below target_j (VezRun does nothing for requests <= 0) - so an instruction's slice, for start cycle S,
 // is the smallest j with S < target_j. S = merged run start (m72b_done0) + cycles run before this instruction.
 unsigned int nec_ins_start_cycles();
 unsigned int v25_ins_start_cycles();
@@ -2644,7 +2644,7 @@ static void m72b_sync();
 static INT32 m72b_push(INT32 type, UINT16 addr, UINT8 data)
 {
 	if (!m72b_on) return 0;
-	if (m72b_n >= M72B_MAX) { // (queue full) catch up the Z80, apply everything queued, then empty it — same order
+	if (m72b_n >= M72B_MAX) { // (queue full) catch up the Z80, apply everything queued, then empty it - same order
 		m72b_sync();
 		m72b_n = m72b_pos = 0;
 	}
@@ -2671,7 +2671,7 @@ static void m72b_ram_write(UINT32 address, UINT8 data)
 	}
 }
 // Work at sample-interval slice ends: fake NMI feeds one sample to the DAC, real NMI is a Z80 NMI. inside: during Z80 execution (event), the NMI
-// is taken right at that instruction boundary (ZetNmi outside execution runs with two instructions' deferred cycles — continuing runs the same instructions)
+// is taken right at that instruction boundary (ZetNmi outside execution runs with two instructions' deferred cycles - continuing runs the same instructions)
 static void m72b_sample_action(INT32 inside)
 {
 #ifdef REI_EV_TRACE
@@ -2685,13 +2685,13 @@ static void m72b_sample_action(INT32 inside)
 			DACWrite(0, 0);
 		}
 	} else if (z80_nmi_enable == Z80_REAL_NMI) {
-		REI_PROF_CPU_BEGIN(nmi); // (profile: NMI — in the i8039 display slot)
+		REI_PROF_CPU_BEGIN(nmi); // (profile: NMI - in the i8039 display slot)
 		if (inside) Z80TakeNmiNow(); else ZetNmi();
 		REI_PROF_CPU_END(nmi, REI_PROF_I8039);
 	}
 }
 // (ReiREM: merge sample slices too) At each sample slice end within merged slices (142/frame), instead of stopping the Z80, a Z80 event
-// fires right after the instruction crossing that slice end — the same instruction boundary as the original stop. If that instruction ends the run
+// fires right after the instruction crossing that slice end - the same instruction boundary as the original stop. If that instruction ends the run
 // (a timer-checked stop point), do it after the timer check as before (BurnTimerAfterStop). Disable with harness REI_NO_Z80EV
 static INT32 m72b_ev_on = 1, m72b_ev_k, m72b_ev_last, m72b_ev_defer, m72b_ev_lagend;
 static struct m72b_ev_env { m72b_ev_env() { if (getenv("REI_NO_Z80EV")) m72b_ev_on = 0; } } m72b_ev_env_init;
@@ -2748,14 +2748,14 @@ static void m72b_z80_run_to(INT32 end)
 		m72b_apply_upto(i);
 #ifndef REI_NO_Z80_MERGE
 		// (ReiREM: slice merging) Slices with no end-of-slice work (sample/NMI, frame end, applying the next slice's V30 writes) batch their timer update
-		// with the next slice — BurnTimerUpdateSlices gives the same result as the original call order (it stops there near timer boundaries)
+		// with the next slice - BurnTimerUpdateSlices gives the same result as the original call order (it stops there near timer boundaries)
 		INT32 j = i;
 		const INT32 ev = nmi_mode && m72b_ev_on;
 		while (j < end - 1 && j < nInterleave - 1 && !(nmi_mode && !ev && j%nSampleInt == nSampleInt-1) &&
 		       !(m72b_pos < m72b_nlim && m72b_ev_slice[m72b_pos] <= j + 1))
 			j++;
 		if (j > i) {
-			REI_PROF_CPU_BEGIN(tsl); // (profile: batched slice update — m6800 display slot, includes ZetRun time)
+			REI_PROF_CPU_BEGIN(tsl); // (profile: batched slice update - m6800 display slot, includes ZetRun time)
 			if (ev) { // Z80 events for sample slice ends inside merged slices [i, j-1]
 				m72b_ev_k = i + ((nSampleInt - 1 - i % nSampleInt) + nSampleInt) % nSampleInt;
 				m72b_ev_last = j - 1;
@@ -2770,7 +2770,7 @@ static void m72b_z80_run_to(INT32 end)
 				BurnTimerAfterStop = NULL;
 				m72b_ev_lagend = 0;
 				ZetEventClear();
-				m72b_ev_after_stop(); // (if anything is left — there should be none)
+				m72b_ev_after_stop(); // (if anything is left - there should be none)
 				while (m72b_ev_k <= m72b_ev_last) { m72b_sample_action(0); m72b_ev_k += nSampleInt; }
 				ZetEventClear();
 			}
@@ -2779,7 +2779,7 @@ static void m72b_z80_run_to(INT32 end)
 		}
 #endif
 		{
-		REI_PROF_CPU_BEGIN(tup); // (profile: slice-end update — m6800 display slot)
+		REI_PROF_CPU_BEGIN(tup); // (profile: slice-end update - m6800 display slot)
 		CPU_RUN_TIMER(1);
 		REI_PROF_CPU_END(tup, REI_PROF_M6800);
 		}
@@ -2940,13 +2940,13 @@ static INT32 DrvFrame()
 	}
 
 #ifndef REI_NO_BATCH
-	if (!use_mcu) { // (ReiREM: batched run — see m72b_* above. MCU boards keep the original order since the MCU interlocks with V30 every slice)
+	if (!use_mcu) { // (ReiREM: batched run - see m72b_* above. MCU boards keep the original order since the MCU interlocks with V30 every slice)
 		m72b_inter = nInterleave;
 		m72b_sample_int = nSampleInt;
 		m72b_z80_total = nCyclesTotal[1];
 		m72b_n = m72b_pos = m72b_z80_done = 0;
 		m72b_on = 1;
-		ZetIdleKeepAcrossRuns(1); // (only m72b_apply_one changes Z80 RAM externally — invalidated there)
+		ZetIdleKeepAcrossRuns(1); // (only m72b_apply_one changes Z80 RAM externally - invalidated there)
 		if (m72z_on) { // (Z80 worker: this frame's state is set, let it follow the V30)
 			m72z_cut = 0;
 			__atomic_store_n(&m72z_done, 0, __ATOMIC_RELAXED);
@@ -2959,7 +2959,7 @@ static INT32 DrvFrame()
 		m72b_mult = multiplier;
 		const INT32 nLines = nInterleave / multiplier;
 		INT32 s = 0, ev = 0; // slice the next instruction runs in, first line not yet passed to scanline_interrupts
-		for (;;) { // (V30 slice merging — see m72b_cur/m72b_next_event)
+		for (;;) { // (V30 slice merging - see m72b_cur/m72b_next_event)
 			while (s < nInterleave && nCyclesDone[0] >= (s + 1) * nCyclesTotal[0] / nInterleave) s++;
 			const INT32 lnow = (s / multiplier < nLines) ? s / multiplier : nLines - 1;
 			for (; ev <= lnow; ev++) { // originally before slice ev*mult
@@ -2969,7 +2969,7 @@ static INT32 DrvFrame()
 			if (s >= nInterleave) break;
 			INT32 gend = m72b_next_event(ev) * multiplier; // from this slice on, past the next event
 			const INT32 keep_prev = rei_v25_auto_keep;
-			if (m72z_on) { // (Z80 worker: shorter runs so it can follow closely — runs without events in between give the same result)
+			if (m72z_on) { // (Z80 worker: shorter runs so it can follow closely - runs without events in between give the same result)
 				// a run continuing a cut one keeps the V35 automatic idle loops (nothing happened in between; otherwise every cut
 				// restarted the detection: in-game kengo V35 2.2 -> 3.5ms)
 				if (m72z_cut && m72b_raster_line < 0) rei_v25_auto_keep = 1;

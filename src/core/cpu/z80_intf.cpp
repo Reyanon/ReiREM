@@ -28,10 +28,10 @@ struct ZetExt {
 
 // ReiREM Z80 dynarec (z80_drc.inc): 1 when the memory map changes (blocks check it per instruction and exit), current CPU's map
 int z80_drc_map_dirty;
-extern UINT8 **Z80MemMap; // (z80.cpp) map of the currently open Z80 — the core reads/writes it directly
+extern UINT8 **Z80MemMap; // (z80.cpp) map of the currently open Z80 - the core reads/writes it directly
 extern UINT32 z80_auto_epoch; // (z80.cpp) auto idle: external change
 extern int z80_auto_keep;
-// (ReiREM) Keep auto-idle history across runs — a promise that the driver calls ZetIdleInvalidate whenever it changes Z80 memory externally
+// (ReiREM) Keep auto-idle history across runs - a promise that the driver calls ZetIdleInvalidate whenever it changes Z80 memory externally
 void ZetIdleKeepAcrossRuns(INT32 keep) { z80_auto_keep = keep; z80_auto_epoch++; }
 void ZetIdleInvalidate() { z80_auto_epoch++; }
  
@@ -225,7 +225,7 @@ INT32 ZetInit(INT32 nCPU)
 	DebugCPU_ZetInitted = 1;
 
 	nOpenedCPU = -1;
-	z80_auto_keep = 0; z80_auto_epoch++; // (ReiREM: auto idle — the driver re-enables it)
+	z80_auto_keep = 0; z80_auto_epoch++; // (ReiREM: auto idle - the driver re-enables it)
 
 	ZetCPUContext[nCPU] = (struct ZetExt*)BurnMalloc(sizeof(ZetExt));
 	memset (ZetCPUContext[nCPU], 0, sizeof(ZetExt));
@@ -284,7 +284,7 @@ void ZetWriteByte(UINT16 address, UINT8 data)
 
 void ZetWriteRom(UINT16 address, UINT8 data)
 {
-	z80_drc_map_dirty = 2; z80_auto_epoch++; // (ReiREM: Z80 dynarec — code bytes change: discard all compiled blocks)
+	z80_drc_map_dirty = 2; z80_auto_epoch++; // (ReiREM: Z80 dynarec - code bytes change: discard all compiled blocks)
 #if defined FBNEO_DEBUG
 	if (!DebugCPU_ZetInitted) bprintf(PRINT_ERROR, _T("ZetWriteRom called without init\n"));
 	if (nOpenedCPU == -1) bprintf(PRINT_ERROR, _T("ZetWriteRom called when no CPU open\n"));
@@ -438,7 +438,7 @@ INT32 ZetRun(INT32 nCycles)
 
 	if (!ZetCPUContext[nOpenedCPU]->BusReq && !ZetCPUContext[nOpenedCPU]->ResetLine) {
 		REI_PROF_CPU_BEGIN(z80);
-		zet_ev_base = nZetCyclesTotal + nDelayed; // (true cycles before this run's first instruction — deferred cycles already passed)
+		zet_ev_base = nZetCyclesTotal + nDelayed; // (true cycles before this run's first instruction - deferred cycles already passed)
 		z80_ev_rel = zet_ev_fn ? zet_ev_at - zet_ev_base : -1;
 		zet_in_run = 1;
 		zet_run_delayed = nDelayed;

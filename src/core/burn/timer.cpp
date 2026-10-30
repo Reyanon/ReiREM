@@ -3,7 +3,7 @@
 #include "timer.h"
 
 #define MAX_TIMER_VALUE ((1 << 30) - 65536)
-// (ReiREM) Cache tick/cycle conversion results — same input, same value (identical results). On MIPS32 (PSP) 64-bit division is a library
+// (ReiREM) Cache tick/cycle conversion results - same input, same value (identical results). On MIPS32 (PSP) 64-bit division is a library
 // call, and this conversion, redone for the same boundary every slice, ran ~3000 times per frame in the M72-family Z80 step (hharry 1.2M cycles)
 #ifndef REI_TIMER_NOMEMO
 #ifdef REI_TIMER_COUNT // (diag) actual division count
@@ -161,7 +161,7 @@ INT32 BurnTimerUpdate(INT32 nCycles)
 #define REI_TIMER_OV 128
 #endif
 #define REI_TIMER_OV_NOTE // (comfortably above the max cycles a CPU can overrun its target: Z80 interrupt + longest instruction)
-INT32 (*BurnTimerSliceHold)() = NULL; // nonzero: the next CPU run is not split-invisible (ZetCyclesDelayedPending) — stop it at the slice target
+INT32 (*BurnTimerSliceHold)() = NULL; // nonzero: the next CPU run is not split-invisible (ZetCyclesDelayedPending) - stop it at the slice target
 void (*BurnTimerAfterStop)() = NULL; // called after each run's timer check (a driver finishes work that belongs after that stop, d_m72 m72b)
 INT32 BurnTimerUpdateSlices(INT32 k0, INT32 k1, INT32 nInterleave, INT32 nTotal)
 {

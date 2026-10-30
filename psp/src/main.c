@@ -1,4 +1,4 @@
-// ReiREM PSP port — P1: runs the shared core on the single-thread pipeline path (SOUND_ON_MAIN)
+// ReiREM PSP port - P1: runs the shared core on the single-thread pipeline path (SOUND_ON_MAIN)
 // The core produces palette-index buffers; color conversion and output are done by the GE (psp/docs/M92_VIDEO.md G1).
 // For the first VERIFY_FRAMES frames, the CPU computes the same hash as the harness (--mode pipelined --autoplay) and logs it every 60 frames,
 // then reads back the GE-drawn screen and compares it pixel by pixel with the CPU conversion. After that, measurement only. START exits.
@@ -122,7 +122,7 @@ static void drc_cache_flush(void *p, int len)
 // If this frame finished early enough to wait for vblank, use the spare time to build deferred dynarec blocks (core drc_idle_compile).
 // left_us = time left until next vblank (approx, -1 if late). Keep a 2.5ms margin
 // V35 per-frame compile budget: low after a frame with spare time, late after a late frame (low 0 = fixed 2000). Overflow blocks are built in
-// spare time. bombrman scene change, V35 2000 instrs: one frame 34.8 -> 23.1ms (together with V35 auto idle always on — see rei_v25_auto_drc_policy).
+// spare time. bombrman scene change, V35 2000 instrs: one frame 34.8 -> 23.1ms (together with V35 auto idle always on - see rei_v25_auto_drc_policy).
 // With late = 2000, bombrman spikes remained (frame after a late one had 2000 instrs). Test: host0:/rei_drc35low "low late"
 static int g_drc35_low = 500, g_drc35_late = 500;
 static int g_drc33_low = 500, g_drc33_late = 2000; // (same scheme for V33/V30, test: host0:/rei_drc33low "low late")
@@ -143,7 +143,7 @@ static void drc_idle_work(int left_us)
 	// running in the interpreter and airass scene change ran 43~49ms for 9 frames (4 frames with budget 2000)
 	rei_drc_set_budget(left_us < 0 ? g_drc33_late : g_drc33_low);
 #ifdef REI_PSP_ME
-	if (g_mix) { // (mode 3: V35 runs on the ME — its state is ME-side data, main does not touch it)
+	if (g_mix) { // (mode 3: V35 runs on the ME - its state is ME-side data, main does not touch it)
 		if (left_us >= 3000)
 			rei_drc_idle_compile((unsigned)(left_us - 2500));
 		return;
@@ -193,7 +193,7 @@ static int watchdog_thread(SceSize args, void *argp)
 	(void)args;
 	(void)argp;
 	int last = -1, still = 0, stop_wait = 0, init = 0;
-	for (;;) { // (whole app: g_wd_done = no game running — the game list, between games)
+	for (;;) { // (whole app: g_wd_done = no game running - the game list, between games)
 		sceKernelDelayThread(1000000);
 		const int f = g_wd_frame, beat = g_wd_beat;
 		still = (f >= 0 && beat == last && !g_wd_done) ? still + 1 : 0;
@@ -208,7 +208,7 @@ static int watchdog_thread(SceSize args, void *argp)
 			sceIoRemove("host0:/rei_home");
 			exit_callback(0, 0, NULL);
 		}
-		if (still == 2 || still == 4) { // diag: frames stalled 2s — main/sound progress (again at 4s: is the ME running or stopped)
+		if (still == 2 || still == 4) { // diag: frames stalled 2s - main/sound progress (again at 4s: is the ME running or stopped)
 			long long md, sd, sw;
 			rei_core_pipe_lines(&md, &sd, &sw);
 			REI_LOG("reirem: stall at frame %d: main line %lld, sound line %lld, sound waits at %lld, ME frames %u\n", f, md, sd,
@@ -311,7 +311,7 @@ static int exit_callback(int arg1, int arg2, void *common)
 	return 0;
 }
 
-// Sleep (power switch): the ME powers off during sleep and restarts on firmware, losing our ME code (sound/drawing) — on wake
+// Sleep (power switch): the ME powers off during sleep and restarts on firmware, losing our ME code (sound/drawing) - on wake
 // main waited for the ME forever and hung (reported 2026-10-17). During play, lock power to defer sleep; on switch press,
 // main at a frame boundary saves a temp state -> ME to firmware -> unlock and sleep -> on wake restart the ME and load the temp state
 static volatile int g_sleep_req, g_resumed, g_power_locked, g_power_flags;
@@ -433,14 +433,14 @@ static const rei_game_found *choose_game(void)
 	}
 	if (n <= 0)
 		return NULL;
-	if (g_settings.show_list) { // (options screen Select game flag — the list is always shown now, so just clear it)
+	if (g_settings.show_list) { // (options screen Select game flag - the list is always shown now, so just clear it)
 		g_settings.show_list = 0;
 		rei_settings_save();
 	}
 #if defined(REI_LOG_ENABLED) || defined(REI_PSP_TESTGAME)
 	{ // dev loop: if host0:/rei_game holds a set name, run that game without the list (for measurement/test scripts)
 #ifdef REI_PSP_TESTGAME
-		// (test builds start as the installed copy: host0: is absent while USB reconnects after a game switch — wait up to 15s)
+		// (test builds start as the installed copy: host0: is absent while USB reconnects after a game switch - wait up to 15s)
 		for (int i = 0; i < 150; i++) {
 			const SceUID d = sceIoDopen("host0:/");
 			if (d >= 0) {
@@ -549,7 +549,7 @@ static int on_me(void)
 }
 
 #if defined(REI_PSP_ME) && defined(REI_PROFILE)
-// The ME has no readable clock (cp0 $9, system clock 0xBC600000, perf counters all appear frozen — tested 2026-10-09).
+// The ME has no readable clock (cp0 $9, system clock 0xBC600000, perf counters all appear frozen - tested 2026-10-09).
 // Profile builds only: a small main-side thread writes system time to a shared variable every 0.5ms and the ME reads it.
 // Coarse resolution, but many samples keep the ms/frame average unbiased. About 1~2% load on main
 static volatile uint32_t g_clock_sh REI_ME_SHARED;
@@ -828,7 +828,7 @@ static gem_slot *gem_get_slot(void) // (called on the ME: buffer being drawn = r
 	return &g_gslot[2];
 }
 static int g_ym_me_on;     // other boards: YM2151 synthesis on the ME too (moved back to main mid-game if the ME overflows)
-// (experimental, off by default) M107: sound side (V35/YM2151/GA20) on the ME too — ME mode 3 (me_mix_start). Core uses the threaded pipeline,
+// (experimental, off by default) M107: sound side (V35/YM2151/GA20) on the ME too - ME mode 3 (me_mix_start). Core uses the threaded pipeline,
 // sound->main 192 lines (M107 games barely use sound->main state: dsoccr94 0 times in 3000 frames, airass 3). Enable: app folder
 // m107mesnd, dev host0:/rei_m107mesnd
 static int g_mix;
@@ -858,7 +858,7 @@ static void other_wait_hook(void) // (core wait hook, only with g_mix) ME: draw/
 }
 static int g_ym_split; // mode 3: main synthesizes YM2151 (YM split)
 #ifdef REI_LOG_ENABLED
-// (diag, host0:/rei_meclock) mode 3: thread feeding time to the ME (me_mix_clock, every 0.1ms) — ME time breakdown
+// (diag, host0:/rei_meclock) mode 3: thread feeding time to the ME (me_mix_clock, every 0.1ms) - ME time breakdown
 static volatile int g_mclk_quit;
 static SceUID g_mclk_th = -1;
 static int mix_clock_thread(SceSize args, void *argp)
@@ -884,7 +884,7 @@ static int other_pop(int16_t *dst)
 	return 1;
 }
 
-// output gain (as the Vita version and ReSys12): doubled, with a soft limit above 75% of full scale instead of clipping — past the
+// output gain (as the Vita version and ReSys12): doubled, with a soft limit above 75% of full scale instead of clipping - past the
 // knee the curve bends smoothly towards full scale (same slope at the knee). After the audio hash (frontend only)
 static inline int16_t out_gain(int32_t v)
 {
@@ -925,7 +925,7 @@ static int audio_thread(SceSize args, void *argp)
 		g_audio_held = 0;
 		while (count + g_frame_len <= 8192 && (g_other && !g_mix ? other_pop(frame) : me_sound_pop(frame))) {
 #ifdef REI_LOG_ENABLED
-			for (int i = 0; i < g_frame_len * 2; i++) { // (diag) peak of popped audio (mode 3 log — silence check)
+			for (int i = 0; i < g_frame_len * 2; i++) { // (diag) peak of popped audio (mode 3 log - silence check)
 				const int a = frame[i] < 0 ? -frame[i] : frame[i];
 				if (a > g_audio_peak)
 					g_audio_peak = a;
@@ -1022,7 +1022,7 @@ static void drop_me_lines(void)
 static void me_halt(void)
 {
 	if (g_other) {
-		if (g_mix && g_me_render_on) { // (mode 3: park the ME in the wait hook — no reboot)
+		if (g_mix && g_me_render_on) { // (mode 3: park the ME in the wait hook - no reboot)
 			const int r = me_mix_pause(1);
 			REI_LOG("reirem: other: ME mix pause %d\n", r);
 			(void)r;
@@ -1058,7 +1058,7 @@ static void me_resume(void)
 
 // Unlock, sleep and wait for wake (the ME is on firmware meanwhile). Dev loop host0:/rei_sleeptest tests the same path without sleeping
 static int g_sleep_test;
-// Sleep stage trace: app folder sleep_trace.txt (play builds too — read next time if it hangs after wake). first = new file
+// Sleep stage trace: app folder sleep_trace.txt (play builds too - read next time if it hangs after wake). first = new file
 void sleep_trace(const char *what, int v, int first)
 {
 	char path[128], line[96];
@@ -1090,7 +1090,7 @@ static void sleep_wait(void)
 	}
 	power_lock(0);
 	scePowerRequestSuspend(); // (a switch request resumes when unlocked, but sleep anyway in case it was lost)
-	// Wake: callback (RESUME_COMPLETE) or wall clock ahead of idle time by over 1s (we slept — don't hang if the callback never comes).
+	// Wake: callback (RESUME_COMPLETE) or wall clock ahead of idle time by over 1s (we slept - don't hang if the callback never comes).
 	// Continue if no sleep within 10s
 	const uint64_t r0 = rtc_us();
 	int slept = 0;
@@ -1162,7 +1162,7 @@ static int save_state_path(const char *path)
 {
 	int rc = -3;
 	if (g_other) {
-		// (other boards: the ME is not sound. With ME rendering, save with drawing paused — me_sound_flush got no reply and failed)
+		// (other boards: the ME is not sound. With ME rendering, save with drawing paused - me_sound_flush got no reply and failed)
 #ifdef REI_PSP_ME
 		int paused = 0;
 		if (g_mix && g_me_render_on) // (mode 3: after the sound side catches up with main, parks in the wait hook and flushes its cache)
@@ -1382,7 +1382,7 @@ static int other_push(const int16_t *src)
 
 // 0 when done, 1 on dev-loop stop request (unload module only)
 // Large span-state copies (VRAM copy) via DMA (rei_defer.h rei_big_copy). 64KB: memcpy 854µs -> DMA 379µs (incl. cache sync,
-// device 2026-10-15). Source is flushed to memory, destination lines are discarded from cache (main never reads the dest — render (ME) reads memory)
+// device 2026-10-15). Source is flushed to memory, destination lines are discarded from cache (main never reads the dest - render (ME) reads memory)
 static void psp_big_copy(void *dst, const void *src, size_t n)
 {
 	if (((uintptr_t)dst & 63) || (n & 63) || n < 4096) {
@@ -1504,12 +1504,12 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 	cfg.clock_us = now_us;
 #endif
 	cfg.progress = load_progress;
-	// M107: the same main/sound pipeline as Vita (ADR-019, sound->main 32 lines later) on one thread — alternating main 32 lines / sound 32 lines
+	// M107: the same main/sound pipeline as Vita (ADR-019, sound->main 32 lines later) on one thread - alternating main 32 lines / sound 32 lines
 	// avoids the CPU switching cost of the original frame (V33/V35 alternating every 2048 slices). Hash matches harness --mode pipelined.
 	// Other boards: the core ignores this value
 	cfg.pipelined = 1;
 #ifdef REI_PSP_ME
-	// Drawing on the ME (PSP-ADR-013): on by default (measured 2026-10-13 — rtype 21.1->8.2ms etc., save/load/reset/menu/exit verified).
+	// Drawing on the ME (PSP-ADR-013): on by default (measured 2026-10-13 - rtype 21.1->8.2ms etc., save/load/reset/menu/exit verified).
 	// Disabled if a nomerender file is in the app folder or dev loop host0:/rei_nomerender exists.
 	// The core enables deferred drawing if the driver supports it (rei_core_render_threaded)
 	int me_render_want = 1;
@@ -1525,7 +1525,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 #endif
 	}
 #ifdef REI_PROFILE
-	{ // (profile build: draw-span timer reads the shared clock on the ME (now_us on_me). Default is main drawing — with host0:/rei_profme
+	{ // (profile build: draw-span timer reads the shared clock on the ME (now_us on_me). Default is main drawing - with host0:/rei_profme
 	  //  keep ME drawing and measure main spans in the real configuration)
 		SceIoStat st;
 		if (sceIoGetstat("host0:/rei_profme", &st) < 0)
@@ -1547,7 +1547,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 	if (me_render_want && strcmp(rei_core_game_board(game->game), "M107") == 0) { // (g_mix above: experimental, off by default)
 		SceIoStat st;
 		char mp[128];
-		// On by default (play-tested 2026-10-17) — disable: app folder nom107mesnd, dev host0:/rei_nom107mesnd
+		// On by default (play-tested 2026-10-17) - disable: app folder nom107mesnd, dev host0:/rei_nom107mesnd
 		snprintf(mp, sizeof(mp), "%snom107mesnd", g_app_dir);
 		g_mix = sceIoGetstat(mp, &st) < 0;
 #ifdef REI_LOG_ENABLED
@@ -1558,7 +1558,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 			cfg.threaded = 1;
 			cfg.s2m_delay_lines = 192;
 			cfg.wait_hook = other_wait_hook;
-			// Main helps draw while waiting (me_mix_main_render), and if sound lags over 64 lines the ME skips drawing in the line hook —
+			// Main helps draw while waiting (me_mix_main_render), and if sound lags over 64 lines the ME skips drawing in the line hook -
 			// ME-overloaded firebarr: 12.7 -> 10.9ms (loop 17.1 -> 16.7, underruns 9 -> 0), dsoccr94 12.8, airass 9.5 (2026-10-16).
 			// Disable (test): host0:/rei_mixnohelp, change threshold host0:/rei_mixlag N
 			g_mix_help = 1;
@@ -1577,7 +1577,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 			}
 #endif
 			// (test host0:/rei_mixsplit) YM2151 synthesis on main (8 channels, YM split): main drains the ring per line, per wait and during vblank wait.
-			// A loss — main +2.5~3.5ms, ME waits at frame end for main's share (dsoccr94 12.1 -> 14.2, airass 10.7 -> 14.3ms)
+			// A loss - main +2.5~3.5ms, ME waits at frame end for main's share (dsoccr94 12.1 -> 14.2, airass 10.7 -> 14.3ms)
 			cfg.ym_main_channels = 0;
 #ifdef REI_LOG_ENABLED
 			{ // host0:/rei_mixsplit "bits": YM2151 channels main synthesizes (0xff if file is empty)
@@ -1751,7 +1751,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 #endif
 		if (!rei_big_copy) { extern void rei_big_copy_reset(void); rei_big_copy_reset(); }
 	}
-	{ // Z80 dynarec stage 2 (PERF PP39): on by default (play-tested 2026-10-17) — disable: app folder noz80drc, dev host0:/rei_noz80drc
+	{ // Z80 dynarec stage 2 (PERF PP39): on by default (play-tested 2026-10-17) - disable: app folder noz80drc, dev host0:/rei_noz80drc
 		extern int rei_z80_drc_enabled;
 		SceIoStat zst;
 		char zp[128];
@@ -1776,9 +1776,9 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 			cfg.no_idle_skip = 0;
 		REI_LOG("reirem: other: idle skip %s\n", cfg.no_idle_skip ? "off" : "on");
 #endif
-		// V35 too: disabled only while dynarec runs (re-enabled on switch to interpreter — v25.cpp rei_v25_auto_with_drc)
+		// V35 too: disabled only while dynarec runs (re-enabled on switch to interpreter - v25.cpp rei_v25_auto_with_drc)
 		// V35 keeps auto idle on during dynarec, and games with nothing to skip turn it off themselves per 120-frame window (v25.cpp
-		// rei_v25_auto_drc_policy — blocks also record writes, so skipping works without recording. In-game emu: kengo 16.4->13.2, ltswords 17.3->13.7)
+		// rei_v25_auto_drc_policy - blocks also record writes, so skipping works without recording. In-game emu: kengo 16.4->13.2, ltswords 17.3->13.7)
 		extern int rei_v25_auto_with_drc, rei_v25_auto_drc_policy;
 		rei_v25_auto_with_drc = 1;
 		// The policy (off by skipped amount per 120-frame window) is disabled: once off it only rechecked after 4 windows (~8s), so kengo/ltswords
@@ -1849,7 +1849,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 	// Drawing on the ME: 3 screen buffers (the ME draws in turn, main submits the newest finished one to the GE)
 	uint16_t *mfb[3] = { NULL, NULL, NULL };
 	uint16_t *mclut[3] = { NULL, NULL, NULL }; // (index mode: palette per buffer)
-	int idx_mode = 0, nclut = 0, gem = 0; // (gem: tile layer GE mode — 1 M107, 2 M72 family)
+	int idx_mode = 0, nclut = 0, gem = 0; // (gem: tile layer GE mode - 1 M107, 2 M72 family)
 	uint16_t gm72_mask[GM72_MAX_MASKS]; // (M72 GE: pen masks to fill the CLUT)
 	int gm72_nm = 0;
 	uint32_t me_shown = 0;
@@ -1860,7 +1860,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 		// Index mode (2026-10-14): the ME draws color indices only (no palette transfer) and the GE colors via CLUT. Screen buffer has the same
 		// shape as image 0 (width w, 16 overflow lines), 3 palette slots. Disabled if VRAM is short, shapes differ, or app folder nomeidx / host0:/rei_nomeidx
 		nclut = rei_core_palette_entries();
-		// (small boards M5x/M6x leave the ME idle: only GE passes grow, occasional spikes — kungfum/travrusa max 17 -> 23ms. Left as is)
+		// (small boards M5x/M6x leave the ME idle: only GE passes grow, occasional spikes - kungfum/travrusa max 17 -> 23ms. Left as is)
 		const char *bd = rei_core_board();
 		const int small_board = strncmp(bd, "M5", 2) == 0 || strncmp(bd, "M6", 2) == 0;
 		idx_mode = !small_board && stride == w && rei_core_trans_width() == w && nclut > 0 && nclut <= 0x800 && video_index_fits(w, h);
@@ -1875,7 +1875,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 				idx_mode = 0;
 			{ extern int g_idx_nocopy; g_idx_nocopy = sceIoGetstat("host0:/rei_idxnocopy", &st) >= 0; }
 			{ extern int g_present_wb; g_present_wb = sceIoGetstat("host0:/rei_presentwb", &st) >= 0; }
-			{ // (diag) number in host0:/rei_geskip — video.c g_ge_skip
+			{ // (diag) number in host0:/rei_geskip - video.c g_ge_skip
 				extern int g_ge_skip;
 				SceUID fd = sceIoOpen("host0:/rei_geskip", PSP_O_RDONLY, 0);
 				if (fd >= 0) {
@@ -1888,7 +1888,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 #endif
 		}
 		// M107 tile layers on the GE (ge_m107.c, 2026-10-15): the ME builds GE lists instead of pixels and draws only sprites. New ME feature,
-		// on by default (play-tested 2026-10-17) — disable: app folder nom107ge, dev host0:/rei_nom107ge
+		// on by default (play-tested 2026-10-17) - disable: app folder nom107ge, dev host0:/rei_nom107ge
 		rei_m107_tiles gem_tiles;
 		if (idx_mode && w == 320 && h == 240 && strcmp(bd, "M107") == 0 && rei_m107_get_tiles(&gem_tiles) == 0) {
 			SceIoStat st;
@@ -1909,11 +1909,11 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 		}
 		// M72-family tile layers on the GE (ge_m72.c, 2026-10-17): the ME builds GE lists and draws only sprites (after the kengo boss, the big
 		// explosion pushed ME drawing past one frame and main waited 6ms each). On by default (play-tested 2026-10-17 "kengo performance
-		// is stable overall") — disable: app folder nom72ge, dev host0:/rei_nom72ge
+		// is stable overall") - disable: app folder nom72ge, dev host0:/rei_nom72ge
 		rei_m72_tiles gm72_tiles;
 		int gm72 = 0;
 		uint32_t gm72_atlas[2] = { 0, 0 };
-		// (majtitle excluded: building per-line strips for the line-scroll layer made the ME slower — in-game emu 10.5 -> 15.9, ME wait 3.4ms)
+		// (majtitle excluded: building per-line strips for the line-scroll layer made the ME slower - in-game emu 10.5 -> 15.9, ME wait 3.4ms)
 		if (idx_mode && !gem && w <= 512 && h <= 256 && rei_m72_get_tiles(&gm72_tiles) == 0 && gm72_tiles.type != 3) {
 			SceIoStat st;
 			char mp[128];
@@ -1929,7 +1929,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 			}
 		}
 		if (gm72)
-			gem = 2; // (buffer layout matches M107 GE — B buffer unused)
+			gem = 2; // (buffer layout matches M107 GE - B buffer unused)
 		const size_t fbytes = idx_mode ? (size_t)w * (h + 16) * 2 : (size_t)stride * h * 2;
 		// (GE mode: per buffer [A fbytes][B][result 128][commands][vertices])
 		const size_t gb_off = (fbytes + 63) & ~(size_t)63, gr_off = gb_off + (size_t)w * h * 2, gc_off = gr_off + 128,
@@ -1965,7 +1965,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 		if (!idx_mode || !(mfb[0] && mfb[1] && mfb[2]))
 			gem = 0;
 #ifdef REI_LOG_ENABLED
-		if (gem) { // (dev) do hand-built GE commands match sceGu — not enabled, a mismatch can hang the GE
+		if (gem) { // (dev) do hand-built GE commands match sceGu - not enabled, a mismatch can hang the GE
 			extern int video_gem_sgu_words(uint32_t *out, int max);
 			uint32_t a[64], b[16];
 			const int na = video_gem_sgu_words(a, 64), nb = gem_selftest_words(b);
@@ -2018,7 +2018,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 		if (mfb[0] && mfb[1] && mfb[2]) {
 			g_game_loop = 1; // (main handles cleanup on HOME exit: the ME must be returned to firmware)
 			power_lock(1);   // (sleep only after main takes down the ME)
-			// YM2151 synthesis on the ME too (sound 1 frame late, same result — harness --ym-me). On by default (2026-10-13: install built with meym
+			// YM2151 synthesis on the ME too (sound 1 frame late, same result - harness --ym-me). On by default (2026-10-13: install built with meym
 			// play/game-switch/exit tested, play_check MEYM=1 passed). Disabled by app folder nomeym or dev loop host0:/rei_nomeym
 			int ym_me = 1;
 			{
@@ -2064,7 +2064,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 			}
 #endif
 			const int r = g_mix ? me_mix_start((void *const *)mfb, stride * 2, alen) : me_render_start((void *const *)mfb, stride * 2);
-#ifdef REI_YM_SPLIT // (YM split only in test builds — always including it grew the shared area, shifted layout, and caused a broken game list and M92 sprite
+#ifdef REI_YM_SPLIT // (YM split only in test builds - always including it grew the shared area, shifted layout, and caused a broken game list and M92 sprite
                     //  flicker on device, reported 2026-10-16)
 			{
 				extern int rei_ym_split_on;
@@ -2094,7 +2094,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 			REI_LOG("reirem: other: index mode %d (palette %d) idx %p %p %p clut %p %p %p w %d h %d\n", idx_mode, nclut, (void *)mfb[0],
 				(void *)mfb[1], (void *)mfb[2], (void *)mclut[0], (void *)mclut[1], (void *)mclut[2], w, h);
 #ifdef REI_LOG_ENABLED
-			{ // (diag) µs in host0:/rei_meburn: keep the ME busy that long after drawing (ME headroom check — main times the same loop)
+			{ // (diag) µs in host0:/rei_meburn: keep the ME busy that long after drawing (ME headroom check - main times the same loop)
 				SceUID fd = sceIoOpen("host0:/rei_meburn", PSP_O_RDONLY, 0);
 				if (fd >= 0 && g_me_render_on) {
 					char b[16] = { 0 };
@@ -2118,7 +2118,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 #endif
 	REI_LOG("reirem: other: deferred %d, ME render %d\n", deferred, g_me_render_on);
 #ifdef REI_PSP_ME
-	if (g_mix && !g_me_render_on) { // (mode 3 failed to start: the threaded core stalls main waiting without a sound side — back to list)
+	if (g_mix && !g_me_render_on) { // (mode 3 failed to start: the threaded core stalls main waiting without a sound side - back to list)
 		rei_message_screen("Sound on ME failed", "Remove m107mesnd from the app folder");
 		g_to_list = 1;
 		g_quit = 1;
@@ -2171,7 +2171,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 		SceCtrlData pad;
 		sceCtrlPeekBufferPositive(&pad, 1);
 #ifdef REI_LOG_ENABLED
-		if (g_pad_n > 0) { // (dev loop host0:/rei_pad: menu/save tests, in-game measurement) script only — mixing device buttons/analog made
+		if (g_pad_n > 0) { // (dev loop host0:/rei_pad: menu/save tests, in-game measurement) script only - mixing device buttons/analog made
 			                // held buttons swallow press edges (rtype coin/start ignored, 2026-10-14)
 			pad.Buttons = pad_script(g_wd_beat);
 			pad.Lx = pad.Ly = 128;
@@ -2300,7 +2300,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 		if (dt > max_emu)
 			max_emu = dt;
 #ifdef REI_LOG_ENABLED
-		{ // (diag) slow frame (emu over 20ms): V33/V30/V35 dynarec compile/flush/interpreted instruction counts in that frame — cause of occasional in-game spikes
+		{ // (diag) slow frame (emu over 20ms): V33/V30/V35 dynarec compile/flush/interpreted instruction counts in that frame - cause of occasional in-game spikes
 			extern unsigned long long rei_drc_stats[13], rei_drc35_stats[13];
 			static unsigned long long l[11];
 			extern unsigned rei_drc_tph[4];
@@ -2317,12 +2317,12 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 				REI_LOG("slow f%d: emu %u.%u ms (ME wait %u us, main waits %u), nec compiled +%llu (%llu insns, %llu us, sync %llu us, dec %u gen %u end %u) flushes +%llu interp +%llu, v35 compiled +%llu (%llu insns, %llu us) flushes +%llu interp +%llu\n", f,
 					(unsigned)(dt / 1000), (unsigned)(dt / 100 % 10), wme, (unsigned)mw, s[3] - l[0], s[7] - l[6], s[10] - l[7], s[11] - l[10], rei_drc_tph[0] - lt[0], rei_drc_tph[1] - lt[1], rei_drc_tph[2] - lt[2], s[4] - l[1], s[2] - l[2], d[3] - l[3], d[7] - l[8], d[10] - l[9],
 					d[4] - l[4], d[2] - l[5]);
-			if (s[4] != l[1]) { // (code cache flushed in that frame: reason totals — nec_drc.inc DRC_WHY)
+			if (s[4] != l[1]) { // (code cache flushed in that frame: reason totals - nec_drc.inc DRC_WHY)
 				extern unsigned rei_drc_flush_why[6];
 				REI_LOG("  flush f%d why (total): code %u table %u overflow %u pages %u idle %u\n", f, rei_drc_flush_why[0], rei_drc_flush_why[1],
 					rei_drc_flush_why[2], rei_drc_flush_why[3], rei_drc_flush_why[4]);
 			}
-			{ // (that frame's in-block V33 / M107 main line clock — host0:/rei_blkclk, event counts on REI_HWPROF builds — and block entry count)
+			{ // (that frame's in-block V33 / M107 main line clock - host0:/rei_blkclk, event counts on REI_HWPROF builds - and block entry count)
 				extern unsigned rei_m107_us[4], rei_drc_blk_acc;
 				static unsigned lb, lm, lv;
 				static unsigned long long le;
@@ -2350,15 +2350,15 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 		}
 #endif
 #ifdef REI_PSP_ME
-		if (!g_mix) // (mode 3: the ME puts sound in the ring — audio thread does me_sound_pop)
+		if (!g_mix) // (mode 3: the ME puts sound in the ring - audio thread does me_sound_pop)
 #endif
 		other_push(audio);
 		const uint64_t t_pres = now_us();
-		video_sync(); // (log: time the wait for previous frame's GE composition separately — video_present does the same wait first)
+		video_sync(); // (log: time the wait for previous frame's GE composition separately - video_present does the same wait first)
 		acc_gesync += now_us() - t_pres;
 		if (g_me_render_on) {
 			const uint32_t done = me_render_done();
-			if (done != me_shown) { // next buffer the ME finished — do not skip ahead to the newest (sprites drawn on alternate frames
+			if (done != me_shown) { // next buffer the ME finished - do not skip ahead to the newest (sprites drawn on alternate frames
 				                    // flickered or vanished when one buffer was skipped: vigilante/rtype device reports). The ME draws at most shown + 2 ahead
 				if ((int32_t)(done - me_shown) < 0) // (reset/load restarts the render counter from 0)
 					me_shown = done;
@@ -2416,7 +2416,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 						video_set_game_buffer(mfb[(me_shown - 1) % 3], w, h, stride, flags);
 #ifdef REI_LOG_ENABLED
 					{ // (diag) host0:/rei_fdump "start count": from that frame for count frames, read the submitted buffer (index+palette or screen) uncached
-					  //  into host0:/fd_<frame>.bin (flicker investigation — compare against harness screens). 16-byte header: w h stride idx_mode
+					  //  into host0:/fd_<frame>.bin (flicker investigation - compare against harness screens). 16-byte header: w h stride idx_mode
 						static int fd_from = -2, fd_n;
 						if (fd_from == -2) {
 							fd_from = -1;
@@ -2431,7 +2431,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 						if (fd_from >= 0 && (int)me_shown >= fd_from && (int)me_shown < fd_from + fd_n) {
 							char p[64];
 							snprintf(p, sizeof(p), "host0:/fd_%05u.bin", (unsigned)me_shown);
-							static uint16_t *tmp; // (only when dumping — boards with tight memory)
+							static uint16_t *tmp; // (only when dumping - boards with tight memory)
 							if (!tmp)
 								tmp = (uint16_t *)malloc(512 * 288 * 2);
 							SceUID o = tmp ? sceIoOpen(p, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC, 0777) : -1;
@@ -2498,7 +2498,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 			drc_idle_work((int32_t)(vc_target - vc) == 1 ? 16683 - (int)(now_us() - t_iter) : -1);
 #endif
 #ifdef REI_PSP_ME
-			if (g_mix && g_ym_split) { // (mode 3 + YM split: main's share of YM2151 while waiting — the ME waits at frame end)
+			if (g_mix && g_ym_split) { // (mode 3 + YM split: main's share of YM2151 while waiting - the ME waits at frame end)
 				while ((int32_t)(vc_target - (uint32_t)sceDisplayGetVcount()) > 0 && !g_quit)
 					if (!rei_core_main_poll())
 						sceKernelDelayThread(200);
@@ -2565,7 +2565,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 #endif
 				}
 				// Channel split (PERF PP35): on overflow first move 4 YM channels (0x55) -> 6 (0x77) to main, then all to main if still overflowing.
-				// On by default (play-tested 2026-10-17: install with the test-enable file was "the most perfect") — disable: app folder nomeysplit,
+				// On by default (play-tested 2026-10-17: install with the test-enable file was "the most perfect") - disable: app folder nomeysplit,
 				// dev host0:/rei_nomeysplit
 				static int ym_split = -1;
 				if (ym_split < 0) {
@@ -2579,7 +2579,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 #endif
 				}
 #if defined(REI_LOG_ENABLED) || defined(REI_PSP_TESTGAME)
-				{ // (test) host0:/rei_ysplit: change the split at fixed frames — so play_check exercises the switch path even on the demo screen
+				{ // (test) host0:/rei_ysplit: change the split at fixed frames - so play_check exercises the switch path even on the demo screen
 					static int ys_test = -1;
 					if (ys_test < 0) {
 						SceIoStat st;
@@ -2590,20 +2590,20 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 					const int at = f + 1;
 					const int m = !ys_test || !g_ym_me_on ? -1 : at == 900 ? 0x55 : at == 1200 ? 0x77 : at == 1500 ? 0x55 : at == 1800 ? 0 : -1;
 					if (m >= 0) {
-						const int r = rei_core_ym_me_split(m); // (outside the log macro argument — recurrence rule 5)
+						const int r = rei_core_ym_me_split(m); // (outside the log macro argument - recurrence rule 5)
 						REI_LOG("reirem: other: YM2151 split test %02x -> %d\n", m, r);
 						(void)r;
 					}
 				}
 #endif
-				if (g_ym_me_on && f >= 1200 && !ym_keep) { // (the ME is briefly heavy right after start — dbreed moved back at frame 240, in-game 18.6->20.3ms)
+				if (g_ym_me_on && f >= 1200 && !ym_keep) { // (the ME is briefly heavy right after start - dbreed moved back at frame 240, in-game 18.6->20.3ms)
 					// (after splitting, main's wait at frame end for the ME's YM share also counts as overflow)
 					extern unsigned long long rei_ymm_wait_us[2];
 					static unsigned long long yw_l;
 					const unsigned long long yw = rei_ymm_wait_us[0] + rei_ymm_wait_us[1] - yw_l;
 					yw_l = rei_ymm_wait_us[0] + rei_ymm_wait_us[1];
 					// (YM synthesis on main costs 4~5ms: when moving everything, keeping it on the ME is better if the wait is less. A split moves only part, so 1.5ms)
-					// If main overflows while split (main work alone over 16ms without waiting — misses vblank, 3s in a row), reduce main's share one step — raised in heavy scenes, but
+					// If main overflows while split (main work alone over 16ms without waiting - misses vblank, 3s in a row), reduce main's share one step - raised in heavy scenes, but
 					// some games are main-bound in play (dsoccr94). For 20s after reducing, raising again needs 5s of continuous overflow (prevents flip-flopping)
 					const int cur = rei_core_ym_me_split_mask();
 					const unsigned long long own = acc_emu > w + yw ? acc_emu - w - yw : 0;
@@ -2633,11 +2633,11 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 				}
 			}
 #endif
-			// (quiet measurement host0:/rei_quietlog: writing a dozen lines over USB every 60 frames itself delayed one iteration — dsoccr94 late
+			// (quiet measurement host0:/rei_quietlog: writing a dozen lines over USB every 60 frames itself delayed one iteration - dsoccr94 late
 			//  iterations almost always 1 per window. Write only every 600 frames; late is the count accumulated meanwhile)
 			if (!g_quiet_log || (f + 1) % 600 == 0) {
 			REI_LOG("frame=%d\n  emu   avg %.1f max %.1f ms\n", f + 1, acc_emu / 60000.0, max_emu / 1000.0);
-			{ // (diag) driver RAM hash — per-frame comparison with harness REI_RAMH
+			{ // (diag) driver RAM hash - per-frame comparison with harness REI_RAMH
 				extern uint32_t rei_core_ram_hash(void);
 				REI_LOG("ramh %d %08x\n", f + 1, (unsigned)rei_core_ram_hash());
 			}
@@ -2744,7 +2744,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 #ifdef REI_PROFILE
 			{ // per-span ms/frame (CPU is sampled)
 				uint64_t acc[REI_PROF_COUNT];
-				const int np = REI_PROF_COUNT; // (sums collected per frame — slow frame log above)
+				const int np = REI_PROF_COUNT; // (sums collected per frame - slow frame log above)
 				memcpy(acc, g_prof60, sizeof(acc));
 				memset(g_prof60, 0, sizeof(g_prof60));
 				char line[256];
@@ -2818,7 +2818,7 @@ static int run_other_board(const rei_game_found *game, const char *set_name)
 	rei_core_exit();
 	REI_LOG("reirem: exit: core down\n");
 #ifdef REI_PSP_ME
-	if (g_me_render_on) { // (halted in our loop: back to firmware only when leaving the app, as in the M92 path — me_release)
+	if (g_me_render_on) { // (halted in our loop: back to firmware only when leaving the app, as in the M92 path - me_release)
 		g_me_ours = 1;
 		g_me_render_on = 0;
 	}
@@ -2974,7 +2974,7 @@ static int run_m92(const rei_game_found *game, const char *set_name)
 	}
 #endif
 	{
-		// Hot V33 code pages (read-only) go to the main CPU scratchpad (16KB, no cache misses) — interpreter and fast-path
+		// Hot V33 code pages (read-only) go to the main CPU scratchpad (16KB, no cache misses) - interpreter and fast-path
 		// instruction fetches use less data cache. Same result (harness --page-cache)
 		int n;
 		const unsigned int *pages = rei_core_v33_hot_pages(&n);
@@ -3065,14 +3065,14 @@ static int run_m92(const rei_game_found *game, const char *set_name)
 #endif
 		g_game_loop = 1; // from here, main handles cleanup on HOME exit (the ME must be returned to firmware)
 		power_lock(1);   // (sleep only after main takes down the ME)
-		{ // The ME's sound V35 does not use the auto-idle counter rule (record next iteration) — the recording cost made the sound side lag and main
+		{ // The ME's sound V35 does not use the auto-idle counter rule (record next iteration) - the recording cost made the sound side lag and main
 		  // frames spike (nbbatman, after 1d35beb). Same result (before starting the ME, flushed to memory)
 			extern int rei_v25_counter_rule;
 			rei_v25_counter_rule = 0;
 		}
 #ifdef REI_DRC
 		{ // The ME's sound V35 also uses dynarec (nbbatman main waited on the ME's V35 interpreter, keeping frames at the limit, PERF PP43).
-		  // On by default (play-tested 2026-10-17) — disable: app folder nom92drc35, dev host0:/rei_nom92drc35
+		  // On by default (play-tested 2026-10-17) - disable: app folder nom92drc35, dev host0:/rei_nom92drc35
 			drc35_main_hooks();
 			SceIoStat dst;
 			char dp[128];
@@ -3339,7 +3339,7 @@ static int run_m92(const rei_game_found *game, const char *set_name)
 				hv = FNV_OFFSET;
 			hv = fnv1a(hv, rgb, REI_SCREEN_W * REI_SCREEN_H * 4);
 #ifdef REI_PSP_ME
-			ha = g_audio_hash; // computed by the audio thread from ME frames (may not align with frame boundaries — compared at 600)
+			ha = g_audio_hash; // computed by the audio thread from ME frames (may not align with frame boundaries - compared at 600)
 #else
 			ha = fnv1a(ha, audio, (size_t)alen * 2 * sizeof(int16_t));
 #endif
@@ -3380,7 +3380,7 @@ static int run_m92(const rei_game_found *game, const char *set_name)
 
 		{ // Frame pacing (adaptive vsync): assign each frame a vblank slot to show on; if it finishes earlier,
 		  // wait until that vblank (sceGuSwapBuffers flips on the next vblank). If late, don't wait and move to the next frame
-		  // to catch up; if more than two frames behind, reset the slot. (Before: a 16.683ms timer — drifted slightly from the display period
+		  // to catch up; if more than two frames behind, reset the slot. (Before: a 16.683ms timer - drifted slightly from the display period
 		  // and occasionally showed a frame twice or skipped one)
 			acc_work += now_us() - t_loop;
 			const uint32_t vc = (uint32_t)sceDisplayGetVcount();
@@ -3598,7 +3598,7 @@ static int run_m92(const rei_game_found *game, const char *set_name)
 	rei_core_exit();
 	REI_LOG("reirem: exit: core down, dev_stop %d\n", dev_stop);
 #ifdef REI_PSP_ME
-	g_me_ours = 1; // (halted in our loop: back to firmware only when leaving the app — me_release)
+	g_me_ours = 1; // (halted in our loop: back to firmware only when leaving the app - me_release)
 #endif
 	free(rgb);
 	free(audio);
@@ -3636,7 +3636,7 @@ int main(int argc, char *argv[])
 	{ // clock for spare-time compiling (drc_idle_work)
 		extern unsigned (*rei_drc_now_us)(void);
 		rei_drc_now_us = (unsigned (*)(void))sceKernelGetSystemTimeLow;
-		drc35_main_hooks(); // (V35 instances use the same function — switched for the ME in mode 3)
+		drc35_main_hooks(); // (V35 instances use the same function - switched for the ME in mode 3)
 	}
 #ifdef REI_LOG_ENABLED
 	{ // (diag) dynarec compile time µs (slow frame log)
@@ -3649,7 +3649,7 @@ int main(int argc, char *argv[])
 		if (sceIoGetstat("host0:/rei_drcfine", &st) >= 0)
 			rei_drc_clock_fine = (unsigned (*)(void))sceKernelGetSystemTimeLow;
 		// M107 main/sound line times (d_m107.cpp, ~34 clock reads per frame); in-block V33 time only with host0:/rei_blkclk
-		// (twice per dispatch — ~800 per frame)
+		// (twice per dispatch - ~800 per frame)
 		extern unsigned (*rei_m107_clock)(void), (*rei_drc_blk_clock)(void);
 		rei_m107_clock = (unsigned (*)(void))sceKernelGetSystemTimeLow;
 		const int blk = sceIoGetstat("host0:/rei_blkclk", &st) >= 0;
@@ -3710,7 +3710,7 @@ int main(int argc, char *argv[])
 		if (sceIoGetstat(vp, &vst) < 0)
 			me_sound_set_dir(g_app_dir);
 	}
-	{ // (off by default) pause the CWCheat thread during play — app folder cwstop (me_sound.c; off because a kernel call once powered off the device)
+	{ // (off by default) pause the CWCheat thread during play - app folder cwstop (me_sound.c; off because a kernel call once powered off the device)
 		extern int me_sound_cw_stop;
 		SceIoStat cst;
 		char cp[160];
@@ -3826,7 +3826,7 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 	// (on exit the system restores default clocks, but with our code on the ME the clock change never completed and the power thread
-	// waited holding the ScePowerClock mutex — the ME is returned to firmware above)
+	// waited holding the ScePowerClock mutex - the ME is returned to firmware above)
 	video_shutdown();
 	g_cleanup_done = 1;
 #ifdef REI_PSP_ME

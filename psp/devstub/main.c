@@ -1,4 +1,4 @@
-// REIREM DEV — empty game for PSPLink development (psp/docs/RULES.md ch.7, psp/tools/run.sh).
+// REIREM DEV - empty game for PSPLink development (psp/docs/RULES.md ch.7, psp/tools/run.sh).
 // With PSPLink as a plugin, modules cannot be loaded from the XMB (it competes for GE/memory). Holding game mode with
 // this EBOOT lets run.sh reset (relaunch this EBOOT to free memory) and then load host0:'s reirem.plain.prx.
 // Uses almost no memory. START exits.

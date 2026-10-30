@@ -20,6 +20,7 @@
 #include "frontend/audio.h"
 #include "frontend/input.h"
 #include "frontend/menu.h"
+#include "common/re_pad.h"
 #include "frontend/settings.h"
 #include "frontend/states.h"
 #include "frontend/threads.h"
@@ -525,6 +526,10 @@ int main(int argc, char *argv[])
 	sceIoMkdir(REI_DATA_DIR "artwork", 0777); // user bezel artwork <set>.png (.jpg .bmp)
 	rei_touch_init();
 	rei_settings_load();
+	// input engine (setting): RePad = the Bluetooth controller plugin from the app, unless it already runs (ur0:tai, or
+	// another Re app); Native = whatever the system has
+	g_settings.input_engine = re_pad_engine_init(g_settings.input_engine, "ux0:app/M92A00001/module/repad.skprx"); // (the kernel cannot open app0:)
+	REI_LOG("input engine: %s, RePad %s", re_pad_engine_name(g_settings.input_engine), re_pad_plugin() ? "running" : "not running");
 	rei_menu_init();
 #ifdef REI_ENABLE_LOG
 	switchtest_load();

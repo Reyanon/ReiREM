@@ -198,7 +198,7 @@ int gm72_check_setup(void)
 			g_clut[k * 256 + i] = (uint16_t)((((masks[k] >> (i & 15)) & 1) ? 0 : 0x8000) | (0x100 + i));
 	for (int i = 0; i < 256; i++)
 		g_clut[nm * 256 + i] = (uint16_t)(((i & 15) ? 0x8000 : 0) | i);
-	if (getenv("GM72_SABOTAGE")) // (self-check: make all sprite CLUTs opaque — verifies the comparison catches mismatches)
+	if (getenv("GM72_SABOTAGE")) // (self-check: make all sprite CLUTs opaque - verifies the comparison catches mismatches)
 		for (int i = 0; i < 256; i++)
 			g_clut[nm * 256 + i] |= 0x8000;
 	fprintf(stderr, "gm72: %dx%d, tiles %d %d, masks %d\n", g_w, g_h, t.ntiles[0], t.ntiles[1], nm);

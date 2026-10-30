@@ -9,7 +9,7 @@ extern "C" {
 typedef struct {
 	int game;          // rei_core_game_* index
 	char zip[160];     // <set>.zip path
-	char parent[160];  // parent zip path for clones (empty if not found — split sets may then fail to run)
+	char parent[160];  // parent zip path for clones (empty if not found - split sets may then fail to run)
 	int present;       // ROM zip exists (if not, zip is empty: greyed out in the list)
 	int supported;     // board runnable on this platform (scan sets 1, PSP keeps only M92)
 } rei_game_found;

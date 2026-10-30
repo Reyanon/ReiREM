@@ -30,7 +30,7 @@ static uint16_t g_scr[W * H];
 static uint8_t g_st[W * H];
 static long g_frames, g_bad_frames, g_bad_px, g_max_tiles, g_max_cmd, g_max_vtx, g_ovf, g_nb_frames, g_nb_px, g_ab_frames;
 static int g_frame_no, g_reported;
-static int g_sab = -1; // (self-check: with GEM_SABOTAGE, ignore occlusion — verifies the compare catches mismatches)
+static int g_sab = -1; // (self-check: with GEM_SABOTAGE, ignore occlusion - verifies the compare catches mismatches)
 
 static gem_slot *get_slot(void) { return &g_slot; }
 
@@ -178,7 +178,7 @@ int gem_check_setup(void)
 		uint8_t *b = g_atlas + (size_t)(k >> 12) * GEM_ATLAS_WIN_BYTES;
 		const int j = k & 4095, tx = (j & 63) * 8, ty = (j >> 6) * 8;
 		for (int y = 0; y < 8; y++)
-			for (int x = 0; x < 8; x++) // (T4: low nibble is the left texel — same as video_gem_atlas_init)
+			for (int x = 0; x < 8; x++) // (T4: low nibble is the left texel - same as video_gem_atlas_init)
 				b[((ty + y) * 512 + tx + x) / 2] |= (uint8_t)((t.gfx[(size_t)k * 64 + y * 8 + x] & 15) << ((x & 1) * 4));
 	}
 	for (int e = 0; e < 2048; e++) {

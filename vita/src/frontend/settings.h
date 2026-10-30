@@ -59,6 +59,7 @@ enum {
 enum {
 	REI_KEY_CROSS, REI_KEY_CIRCLE, REI_KEY_SQUARE, REI_KEY_TRIANGLE,
 	REI_KEY_L, REI_KEY_R, REI_KEY_SELECT, REI_KEY_START,
+	REI_KEY_L2, REI_KEY_R2, REI_KEY_L3, REI_KEY_R3, // (a controller's; settings before them: keyver < 2, None was 8)
 	REI_KEY_COUNT
 };
 
@@ -67,10 +68,24 @@ enum {
 // Combo keys: a Vita button (Cross, Circle, Square, Triangle, L, R = REI_KEY_CROSS..REI_KEY_R) can act as two other Vita
 // buttons pressed together. combo[key] = bit mask (1 << REI_KEY_*) of those two, 0 = normal
 #define REI_COMBO_KEYS 6
+// keys that can be combo keys: those six, then a controller's L2 / R2 / L3 / R3 (the pairs stay of the six)
+#define REI_COMBO_SRC 10
 #define REI_TURBO_BUTTONS 6
 enum { REI_TURBO_FAST, REI_TURBO_MEDIUM, REI_TURBO_SLOW, REI_TURBO_SPEED_COUNT };
 
 #define REI_DIP_BYTES_MAX 8
+#define REI_PROFILES 13 // re_pad's RE_PAD_PROFILES: the keys belong to a device (Vita, each kind of controller)
+#define REI_PORTS 2 // players with their own controls (Port 1 = 1P, Port 2 = 2P)
+
+// one player's controls (Controls > Port N Controls; RetroArch style)
+typedef struct {
+	int keymap[REI_ACT_COUNT];          // REI_KEY_*
+	int stick;                          // REI_STICK_*
+	int turbo_key;                      // REI_KEY_* or REI_KEY_NONE (off)
+	int turbo_btn;                      // game button fired by turbo, 1..REI_TURBO_BUTTONS
+	int turbo_speed;                    // REI_TURBO_FAST..SLOW
+	int combo[REI_KEY_COUNT];          // combo keys (see REI_COMBO_KEYS)
+} rei_port;
 
 // Game list filter (SELECT cycles in this order)
 enum { REI_LIST_PLAYABLE, REI_LIST_ALL, REI_LIST_FAVORITES, REI_LIST_FILTER_COUNT };
@@ -85,10 +100,9 @@ typedef struct {
 	int border_color;                   // REI_BCOL_*
 	int menu_confirm;                   // REI_CONFIRM_*
 	int start_stage;                    // 0 = Stage 1 ~ 6 = Final (rei_core_set_start_stage)
-	int keymap[REI_ACT_COUNT];          // REI_KEY_*
-	int turbo_key;                      // REI_KEY_* or REI_KEY_NONE (off)
-	int turbo_btn;                      // game button fired by turbo, 1..REI_TURBO_BUTTONS
-	int turbo_speed;                   // REI_TURBO_FAST..SLOW
+	rei_port port[REI_PROFILES]; // controls profiles: one per device (re_pad_profile), not per player
+	int pad_src[REI_PORTS];             // RE_PAD_SRC_* of each player's controller (global only; 0 = Auto)
+	int input_engine;                   // RE_PAD_ENGINE_* (global only): Native or the bundled RePad plugin
 	int cheat_health;                   // 1P infinite health
 	int dip_count;                      // number of saved DIP bytes (0 = driver defaults). Per-game file <set>.cfg
 	uint8_t dip[REI_DIP_BYTES_MAX];
@@ -96,8 +110,6 @@ typedef struct {
 	int list_filter;                    // game list filter: REI_LIST_*
 	int show_list;                      // show the list next start even with one game (options screen Select game)
 	int rotate;                         // REI_ROT_*
-	int stick;                          // REI_STICK_*
-	int combo[REI_COMBO_KEYS];          // combo keys (see REI_COMBO_KEYS)
 	int touch_keys;                     // the touch screen buttons press their keys
 	int touch_show;                     // the touch buttons are drawn over the game
 	int theme;                          // REI_THEME_* (global only)
@@ -130,13 +142,15 @@ void rei_settings_touch_follow(int keep);
 int rei_fav_is(const char *set);
 void rei_fav_toggle(const char *set); // add or remove, then save
 
-// Default button mapping (attack □, jump △, coin SELECT, start START, turbo off)
+// Default button mapping (attack □, jump △, coin SELECT, start START, turbo off): every port and the touch buttons
 void rei_settings_default_keys(void);
+// one port's default buttons, stick, turbo and combo keys
+void rei_settings_default_port(int port);
 
 // Frames per turbo cycle (half pressed, half released)
-int rei_turbo_period(void);
+int rei_turbo_period(int port);
 // REI_ACT_* of the game button fired by turbo (turbo_btn)
-int rei_turbo_act(void);
+int rei_turbo_act(int port);
 
 // REI_KEY_* -> SCE_CTRL_* bit, display name (REI_KEY_NONE is 0, "None")
 uint32_t rei_key_mask(int key);

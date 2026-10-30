@@ -1304,7 +1304,7 @@ static void bg_decode(void)
 	uint16_t *dst = video_spare565();
 	video_sync(); // (the GE may read that area)
 	static uint16_t row[SCREEN_W];
-	// Scaled to the screen by averaging the source pixels each screen pixel covers (smooth edges on the logo and grid lines — nearest
+	// Scaled to the screen by averaging the source pixels each screen pixel covers (smooth edges on the logo and grid lines - nearest
 	// sampling dropped lines and left jagged letters, owner 2026-10-28), 80% brightness (a background, softened by the bar text)
 	for (int y = 0; y < SCREEN_H; y++) {
 		const int y0 = y * h / SCREEN_H, y1 = (y + 1) * h / SCREEN_H > y0 ? (y + 1) * h / SCREEN_H : y0 + 1;

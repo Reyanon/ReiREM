@@ -74,7 +74,8 @@ int rei_touch_add(int x, int y, int w, int h, int key)
 	a->y = (int16_t)y;
 	a->w = (int16_t)w;
 	a->h = (int16_t)h;
-	a->key = (int8_t)(key >= 0 && key < REI_TKEY_COUNT ? key : REI_KEY_CROSS);
+	a->key = (int16_t)((key >= 0 && key < REI_TKEY_COUNT) || (key > REI_TKEY_COMBO && key < REI_TKEY_COMBO + (1 << REI_KEY_COUNT))
+		? key : REI_KEY_CROSS);
 	s_gen++;
 	return s_n++;
 }
@@ -111,6 +112,13 @@ uint32_t rei_touch_key_code(int key)
 	static const uint32_t dirs[4] = { SCE_CTRL_UP, SCE_CTRL_DOWN, SCE_CTRL_LEFT, SCE_CTRL_RIGHT };
 	if (key >= REI_TKEY_UP && key < REI_TKEY_COUNT)
 		return dirs[key - REI_TKEY_UP];
+	if (REI_TKEY_IS_COMBO(key)) {
+		uint32_t b = 0;
+		for (int k = 0; k < REI_KEY_COUNT; k++)
+			if ((key - REI_TKEY_COMBO) & (1 << k))
+				b |= rei_key_mask(k);
+		return b;
+	}
 	return rei_key_mask(key);
 }
 
@@ -119,6 +127,14 @@ const char *rei_touch_key_name(int key)
 	static const char *const dirs[4] = { "Up", "Down", "Left", "Right" };
 	if (key >= REI_TKEY_UP && key < REI_TKEY_COUNT)
 		return dirs[key - REI_TKEY_UP];
+	if (REI_TKEY_IS_COMBO(key)) {
+		static char nm[32];
+		nm[0] = 0;
+		for (int k = 0; k < REI_KEY_COUNT; k++)
+			if ((key - REI_TKEY_COMBO) & (1 << k))
+				snprintf(nm + strlen(nm), sizeof(nm) - strlen(nm), "%s%s", nm[0] ? "+" : "", rei_key_name(k));
+		return nm;
+	}
 	return rei_key_name(key);
 }
 

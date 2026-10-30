@@ -1,4 +1,5 @@
 #include "frontend/settings.h"
+#include "common/re_pad.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,52 +25,68 @@ rei_settings g_settings = {
 	.border_color = REI_BCOL_GRAY,
 	.menu_confirm = REI_CONFIRM_CROSS,
 	.start_stage = 0,
-	.keymap = { REI_KEY_SQUARE, REI_KEY_TRIANGLE, REI_KEY_SELECT, REI_KEY_START, REI_KEY_CIRCLE, REI_KEY_L, REI_KEY_R, REI_KEY_NONE },
-	.turbo_key = REI_KEY_NONE,
-	.turbo_btn = 1,
-	.turbo_speed = REI_TURBO_FAST,
+	.port = {
+		{ .keymap = { REI_KEY_SQUARE, REI_KEY_TRIANGLE, REI_KEY_SELECT, REI_KEY_START, REI_KEY_CIRCLE, REI_KEY_L, REI_KEY_R,
+			REI_KEY_NONE }, .stick = REI_STICK_LEFT, .turbo_key = REI_KEY_NONE, .turbo_btn = 1, .turbo_speed = REI_TURBO_FAST },
+		{ .keymap = { REI_KEY_SQUARE, REI_KEY_TRIANGLE, REI_KEY_SELECT, REI_KEY_START, REI_KEY_CIRCLE, REI_KEY_L, REI_KEY_R,
+			REI_KEY_NONE }, .stick = REI_STICK_LEFT, .turbo_key = REI_KEY_NONE, .turbo_btn = 1, .turbo_speed = REI_TURBO_FAST },
+	},
 	.cheat_health = 0,
 	.dip_count = 2,
 	.dip = { 157, 247 },
 	.rotate = REI_ROT_AUTO,
-	.stick = REI_STICK_LEFT,
 	.touch_keys = 1,
 	.touch_show = 1,
 	.theme = REI_THEME_GRAPHITE,
+	.input_engine = RE_PAD_ENGINE_NATIVE,
 };
 
 static const char *const s_keymap_keys[REI_ACT_COUNT] = { "key_attack", "key_jump", "key_coin", "key_start",
 	"key_b3", "key_b4", "key_b5", "key_b6" };
+static const char *const s_keymap2_keys[REI_ACT_COUNT] = { "key2_attack", "key2_jump", "key2_coin", "key2_start",
+	"key2_b3", "key2_b4", "key2_b5", "key2_b6" };
+
+void rei_settings_default_port(int port)
+{
+	if (port < 0 || port >= REI_PROFILES) // (a profile: re_pad_profile)
+		return;
+	rei_port *p = &g_settings.port[port];
+	p->keymap[REI_ACT_ATTACK] = REI_KEY_SQUARE;
+	p->keymap[REI_ACT_JUMP] = REI_KEY_TRIANGLE;
+	p->keymap[REI_ACT_COIN] = REI_KEY_SELECT;
+	p->keymap[REI_ACT_START] = REI_KEY_START;
+	p->keymap[REI_ACT_B3] = REI_KEY_CIRCLE;
+	p->keymap[REI_ACT_B4] = REI_KEY_L;
+	p->keymap[REI_ACT_B5] = REI_KEY_R;
+	p->keymap[REI_ACT_B6] = REI_KEY_NONE;
+	p->turbo_key = REI_KEY_NONE;
+	p->turbo_btn = 1;
+	p->turbo_speed = REI_TURBO_FAST;
+	p->stick = REI_STICK_LEFT;
+	memset(p->combo, 0, sizeof(p->combo));
+}
 
 void rei_settings_default_keys(void)
 {
-	g_settings.keymap[REI_ACT_ATTACK] = REI_KEY_SQUARE;
-	g_settings.keymap[REI_ACT_JUMP] = REI_KEY_TRIANGLE;
-	g_settings.keymap[REI_ACT_COIN] = REI_KEY_SELECT;
-	g_settings.keymap[REI_ACT_START] = REI_KEY_START;
-	g_settings.keymap[REI_ACT_B3] = REI_KEY_CIRCLE;
-	g_settings.keymap[REI_ACT_B4] = REI_KEY_L;
-	g_settings.keymap[REI_ACT_B5] = REI_KEY_R;
-	g_settings.keymap[REI_ACT_B6] = REI_KEY_NONE;
-	g_settings.turbo_key = REI_KEY_NONE;
-	g_settings.turbo_btn = 1;
-	g_settings.turbo_speed = REI_TURBO_FAST;
-	g_settings.stick = REI_STICK_LEFT;
+	for (int i = 0; i < REI_PROFILES; i++)
+		rei_settings_default_port(i);
 	g_settings.touch_keys = 1;
 	g_settings.touch_show = 1;
-	memset(g_settings.combo, 0, sizeof(g_settings.combo));
 }
 
-int rei_turbo_period(void)
+// a player's controls: the profile of the device it reads now
+static const rei_port *port_of(int port) { return &g_settings.port[re_pad_player_profile(port)]; }
+
+int rei_turbo_period(int port)
 {
 	static const int p[REI_TURBO_SPEED_COUNT] = { 4, 6, 8 }; // 15/10/7.5 per second at 60fps
-	return p[g_settings.turbo_speed];
+	return p[port_of(port)->turbo_speed];
 }
 
-int rei_turbo_act(void)
+int rei_turbo_act(int port)
 {
 	static const int a[REI_TURBO_BUTTONS] = { REI_ACT_ATTACK, REI_ACT_JUMP, REI_ACT_B3, REI_ACT_B4, REI_ACT_B5, REI_ACT_B6 };
-	const int b = g_settings.turbo_btn;
+	const int b = port_of(port)->turbo_btn;
 	return a[(b >= 1 && b <= REI_TURBO_BUTTONS ? b : 1) - 1];
 }
 
@@ -78,6 +95,7 @@ uint32_t rei_key_mask(int key)
 	static const uint32_t m[REI_KEY_COUNT] = {
 		SCE_CTRL_CROSS, SCE_CTRL_CIRCLE, SCE_CTRL_SQUARE, SCE_CTRL_TRIANGLE,
 		SCE_CTRL_LTRIGGER, SCE_CTRL_RTRIGGER, SCE_CTRL_SELECT, SCE_CTRL_START,
+		RE_PAD_L2, RE_PAD_R2, RE_PAD_L3, RE_PAD_R3,
 	};
 	return (key >= 0 && key < REI_KEY_COUNT) ? m[key] : 0;
 }
@@ -85,7 +103,7 @@ uint32_t rei_key_mask(int key)
 const char *rei_key_name(int key)
 {
 	static const char *const n[REI_KEY_COUNT] = {
-		"Cross", "Circle", "Square", "Triangle", "L", "R", "Select", "Start",
+		"Cross", "Circle", "Square", "Triangle", "L", "R", "Select", "Start", "L2", "R2", "L3", "R3",
 	};
 	return (key >= 0 && key < REI_KEY_COUNT) ? n[key] : "None";
 }
@@ -94,15 +112,19 @@ static int clampi(int v, int lo, int hi)
 {
 	return v < lo ? lo : (v > hi ? hi : v);
 }
+// a key from a settings file: files before L2 / R2 / L3 / R3 (no keyver=2 line first) had None as 8
+static int s_keyver;
+static int key_val(int v, int hi) { return clampi(s_keyver < 2 && v == 8 ? REI_KEY_NONE : v, 0, hi); }
 
-static const char *const s_combo_keys[REI_COMBO_KEYS] = { "cross", "circle", "square", "triangle", "l", "r" };
+static const char *const s_combo_keys[REI_KEY_COUNT] = { "cross", "circle", "square", "triangle", "l", "r", NULL, NULL,
+	"l2", "r2", "l3", "r3" };
 // a combo value is two different keys of Cross..R
 static int combo_ok(int v)
 {
 	int n = 0;
 	for (int k = 0; k < REI_KEY_COUNT; k++)
 		if (v & (1 << k)) {
-			if (k >= REI_COMBO_KEYS)
+			if (k == REI_KEY_SELECT || k == REI_KEY_START) // (pairs of Cross..R, L2 / R2 / L3 / R3)
 				return 0;
 			n++;
 		}
@@ -143,8 +165,7 @@ static void read_dips(const char *key, int val)
 // Per-game overridable items (global values kept in s_global)
 typedef struct {
 	int show_fps, aspect, filter, scan_type, scan_strength, border, border_color, rotate;
-	int keymap[REI_ACT_COUNT], turbo_key, turbo_btn, turbo_speed, stick;
-	int combo[REI_COMBO_KEYS];
+	rei_port port[REI_PROFILES];
 	int touch_keys, touch_show;
 } game_part;
 static game_part s_global;   // values from the global settings file (written back to it while per-game settings are on)
@@ -155,11 +176,8 @@ static void part_get(game_part *g)
 	g->show_fps = g_settings.show_fps; g->aspect = g_settings.aspect; g->filter = g_settings.filter;
 	g->scan_type = g_settings.scan_type; g->scan_strength = g_settings.scan_strength;
 	g->border = g_settings.border; g->border_color = g_settings.border_color;
-	memcpy(g->keymap, g_settings.keymap, sizeof(g->keymap));
-	g->turbo_key = g_settings.turbo_key; g->turbo_btn = g_settings.turbo_btn;
-	g->turbo_speed = g_settings.turbo_speed;
-	g->rotate = g_settings.rotate; g->stick = g_settings.stick;
-	memcpy(g->combo, g_settings.combo, sizeof(g->combo));
+	memcpy(g->port, g_settings.port, sizeof(g->port));
+	g->rotate = g_settings.rotate;
 	g->touch_keys = g_settings.touch_keys; g->touch_show = g_settings.touch_show;
 }
 static void part_set(const game_part *g)
@@ -167,11 +185,8 @@ static void part_set(const game_part *g)
 	g_settings.show_fps = g->show_fps; g_settings.aspect = g->aspect; g_settings.filter = g->filter;
 	g_settings.scan_type = g->scan_type; g_settings.scan_strength = g->scan_strength;
 	g_settings.border = g->border; g_settings.border_color = g->border_color;
-	memcpy(g_settings.keymap, g->keymap, sizeof(g->keymap));
-	g_settings.turbo_key = g->turbo_key; g_settings.turbo_btn = g->turbo_btn;
-	g_settings.turbo_speed = g->turbo_speed;
-	g_settings.rotate = g->rotate; g_settings.stick = g->stick;
-	memcpy(g_settings.combo, g->combo, sizeof(g->combo));
+	memcpy(g_settings.port, g->port, sizeof(g->port));
+	g_settings.rotate = g->rotate;
 	g_settings.touch_keys = g->touch_keys; g_settings.touch_show = g->touch_show;
 }
 // Old turbo lines (turbo_attack / turbo_jump, one key per button) seen in the file being read. If the file has no turbo_key,
@@ -180,9 +195,24 @@ static int s_old_turbo[2], s_new_turbo;
 static void parse_begin(void)
 {
 	s_old_turbo[0] = s_old_turbo[1] = -1;
+	s_keyver = 0;
 	s_new_turbo = 0;
 }
+// files before profiles per device (keyver < 3): 1P's controls go to every device
+static void ports_spread(void)
+{
+	if (s_keyver >= 3)
+		return;
+	for (int i = 1; i < REI_PROFILES; i++)
+		g_settings.port[i] = g_settings.port[0];
+}
+static void parse_end_turbo(void);
 static void parse_end(void)
+{
+	parse_end_turbo();
+	ports_spread();
+}
+static void parse_end_turbo(void)
 {
 	if (s_new_turbo)
 		return;
@@ -191,63 +221,101 @@ static void parse_end(void)
 	if (s_old_turbo[0] == REI_KEY_CROSS && (s_old_turbo[1] < 0 || s_old_turbo[1] == REI_KEY_NONE))
 		s_old_turbo[0] = REI_KEY_NONE;
 	if (s_old_turbo[0] >= 0 && s_old_turbo[0] != REI_KEY_NONE) {
-		g_settings.turbo_key = s_old_turbo[0];
-		g_settings.turbo_btn = 1;
+		g_settings.port[0].turbo_key = s_old_turbo[0];
+		g_settings.port[0].turbo_btn = 1;
 	} else if (s_old_turbo[1] >= 0 && s_old_turbo[1] != REI_KEY_NONE) {
-		g_settings.turbo_key = s_old_turbo[1];
-		g_settings.turbo_btn = 2;
+		g_settings.port[0].turbo_key = s_old_turbo[1];
+		g_settings.port[0].turbo_btn = 2;
 	} else if (s_old_turbo[0] >= 0 || s_old_turbo[1] >= 0)
-		g_settings.turbo_key = REI_KEY_NONE;
+		g_settings.port[0].turbo_key = REI_KEY_NONE;
+}
+// One port line: Port 1 keeps the names from before ports (stick, turbo_*, combo_*, key_*), Port 2 has "p2_" before
+// them (its keys: key2_*). Returns 1 if recognized
+static int read_port(const char *key, int val)
+{
+	rei_port *p = &g_settings.port[0];
+	const char *dot = strchr(key, '.');
+	if (dot) { // a device's profile: "<profile>.<item>"
+		int i = 0;
+		while (i < REI_PROFILES && (strlen(re_pad_profile_key(i)) != (size_t)(dot - key) || strncmp(key, re_pad_profile_key(i), dot - key)))
+			i++;
+		if (i == REI_PROFILES)
+			return 0;
+		p = &g_settings.port[i];
+		key = dot + 1;
+	} else if (!strncmp(key, "p2_", 3)) {
+		p = &g_settings.port[1];
+		key += 3;
+	}
+	if (!strcmp(key, "turbo_key")) {
+		p->turbo_key = key_val(val, REI_KEY_NONE);
+		if (p == &g_settings.port[0])
+			s_new_turbo = 1;
+	} else if (!strcmp(key, "turbo_btn")) p->turbo_btn = clampi(val, 1, REI_TURBO_BUTTONS);
+	else if (!strcmp(key, "turbo_speed")) p->turbo_speed = clampi(val, 0, REI_TURBO_SPEED_COUNT - 1);
+	else if (!strcmp(key, "stick")) p->stick = clampi(val, 0, REI_STICK_COUNT - 1);
+	else if (!strncmp(key, "combo_", 6)) { // combo_<key>=<mask of two keys>
+		for (int k = 0; k < REI_KEY_COUNT; k++)
+			if (s_combo_keys[k] && !strcmp(key + 6, s_combo_keys[k])) {
+				p->combo[k] = combo_ok(val) ? val : 0;
+				return 1;
+			}
+		return 0;
+	} else {
+		for (int a = 0; a < REI_ACT_COUNT; a++) {
+			const int v = key_val(val, a >= REI_ACT_B3 ? REI_KEY_NONE : REI_KEY_COUNT - 1);
+			if (!strcmp(key, s_keymap_keys[a])) {
+				p->keymap[a] = v;
+				return 1;
+			}
+			if (!strcmp(key, s_keymap2_keys[a])) {
+				g_settings.port[1].keymap[a] = v;
+				return 1;
+			}
+		}
+		return 0;
+	}
+	return 1;
 }
 // One overridable line (shared by global and per-game files). Returns 1 if recognized
 static int read_part(const char *key, int val)
 {
-	if (!strcmp(key, "show_fps")) g_settings.show_fps = val != 0;
+	if (!strcmp(key, "keyver")) s_keyver = val;
+	else if (!strcmp(key, "show_fps")) g_settings.show_fps = val != 0;
 	else if (!strcmp(key, "aspect")) g_settings.aspect = clampi(val, 0, REI_ASPECT_COUNT - 1);
 	else if (!strcmp(key, "filter")) g_settings.filter = clampi(val, 0, REI_FILTER_COUNT - 1);
 	else if (!strcmp(key, "scan_type")) g_settings.scan_type = clampi(val, 0, REI_SCAN_COUNT - 1);
 	else if (!strcmp(key, "scan_strength")) g_settings.scan_strength = clampi(val, 0, REI_SCAN_STRENGTH_COUNT - 1);
 	else if (!strcmp(key, "border")) g_settings.border = clampi(val, 0, REI_BORDER_COUNT - 1);
 	else if (!strcmp(key, "border_color")) g_settings.border_color = clampi(val, 0, REI_BCOL_COUNT - 1);
-	else if (!strcmp(key, "turbo_key")) {
-		g_settings.turbo_key = clampi(val, 0, REI_KEY_NONE);
-		s_new_turbo = 1;
-	} else if (!strcmp(key, "turbo_btn")) g_settings.turbo_btn = clampi(val, 1, REI_TURBO_BUTTONS);
-	else if (!strcmp(key, "turbo_attack")) s_old_turbo[0] = clampi(val, 0, REI_KEY_NONE);
-	else if (!strcmp(key, "turbo_jump")) s_old_turbo[1] = clampi(val, 0, REI_KEY_NONE);
-	else if (!strcmp(key, "turbo_speed")) g_settings.turbo_speed = clampi(val, 0, REI_TURBO_SPEED_COUNT - 1);
+	else if (!strcmp(key, "turbo_attack")) s_old_turbo[0] = key_val(val, REI_KEY_NONE);
+	else if (!strcmp(key, "turbo_jump")) s_old_turbo[1] = key_val(val, REI_KEY_NONE);
 	else if (!strcmp(key, "rotate")) g_settings.rotate = clampi(val, 0, REI_ROT_COUNT - 1);
-	else if (!strcmp(key, "stick")) g_settings.stick = clampi(val, 0, REI_STICK_COUNT - 1);
 	else if (!strcmp(key, "touch_keys")) g_settings.touch_keys = val != 0;
 	else if (!strcmp(key, "touch_show")) g_settings.touch_show = val != 0;
-	else if (!strncmp(key, "combo_", 6)) { // combo_<key>=<mask of two keys>
-		for (int k = 0; k < REI_COMBO_KEYS; k++)
-			if (!strcmp(key + 6, s_combo_keys[k])) {
-				g_settings.combo[k] = combo_ok(val) ? val : 0;
-				return 1;
-			}
-		return 0;
-	} else {
-		for (int a = 0; a < REI_ACT_COUNT; a++)
-			if (!strcmp(key, s_keymap_keys[a])) {
-				g_settings.keymap[a] = clampi(val, 0, a >= REI_ACT_B3 ? REI_KEY_NONE : REI_KEY_COUNT - 1);
-				return 1;
-			}
-		return 0;
-	}
+	else
+		return read_port(key, val);
 	return 1;
 }
 static void write_part(FILE *f, const game_part *g)
 {
+	fprintf(f, "keyver=3\n"); // (first: the keys below are read with it; 3: a profile per device)
 	fprintf(f, "show_fps=%d\naspect=%d\nfilter=%d\n", g->show_fps, g->aspect, g->filter);
 	fprintf(f, "scan_type=%d\nscan_strength=%d\n", g->scan_type, g->scan_strength);
 	fprintf(f, "border=%d\nborder_color=%d\n", g->border, g->border_color);
-	for (int a = 0; a < REI_ACT_COUNT; a++)
-		fprintf(f, "%s=%d\n", s_keymap_keys[a], g->keymap[a]);
-	fprintf(f, "turbo_key=%d\nturbo_btn=%d\nturbo_speed=%d\n", g->turbo_key, g->turbo_btn, g->turbo_speed);
-	fprintf(f, "rotate=%d\nstick=%d\ntouch_keys=%d\ntouch_show=%d\n", g->rotate, g->stick, g->touch_keys, g->touch_show);
-	for (int k = 0; k < REI_COMBO_KEYS; k++)
-		fprintf(f, "combo_%s=%d\n", s_combo_keys[k], g->combo[k]);
+	for (int i = 0; i < REI_PROFILES; i++) {
+		const rei_port *p = &g->port[i];
+		char pre[16];
+		snprintf(pre, sizeof(pre), "%s.", re_pad_profile_key(i));
+		for (int a = 0; a < REI_ACT_COUNT; a++)
+			fprintf(f, "%s%s=%d\n", pre, s_keymap_keys[a], p->keymap[a]);
+		fprintf(f, "%sturbo_key=%d\n%sturbo_btn=%d\n%sturbo_speed=%d\n%sstick=%d\n", pre, p->turbo_key, pre, p->turbo_btn, pre,
+			p->turbo_speed, pre, p->stick);
+		for (int k = 0; k < REI_KEY_COUNT; k++)
+			if (s_combo_keys[k])
+				fprintf(f, "%scombo_%s=%d\n", pre, s_combo_keys[k], p->combo[k]);
+	}
+	fprintf(f, "rotate=%d\ntouch_keys=%d\ntouch_show=%d\n", g->rotate, g->touch_keys, g->touch_show);
 }
 
 // Favorite games: set names in favorites.cfg, one per line
@@ -301,6 +369,8 @@ void rei_fav_toggle(const char *set)
 
 void rei_settings_load(void)
 {
+	for (int i = 0; i < REI_PROFILES; i++) // (every device's profile from the defaults first)
+		rei_settings_default_port(i);
 	fav_load();
 	// If missing in the new folder, read settings from the nbbatman-only era (the next save goes to the new folder)
 	FILE *f = fopen(SETTINGS_PATH, "r");
@@ -319,14 +389,19 @@ void rei_settings_load(void)
 		else if (!strcmp(key, "list_filter")) g_settings.list_filter = clampi(val, 0, REI_LIST_FILTER_COUNT - 1);
 		else if (!strcmp(key, "list_all")) g_settings.list_filter = val ? REI_LIST_ALL : REI_LIST_PLAYABLE; // (old two-state filter)
 		else if (!strcmp(key, "theme")) g_settings.theme = clampi(val, 0, REI_THEME_COUNT - 1);
+		else if (!strcmp(key, "pad_p1")) g_settings.pad_src[0] = clampi(val, 0, RE_PAD_SRC_COUNT - 1);
+		else if (!strcmp(key, "pad_p2")) g_settings.pad_src[1] = clampi(val, 0, RE_PAD_SRC_COUNT - 1);
+		else if (!strcmp(key, "input_engine")) g_settings.input_engine = clampi(val, 0, RE_PAD_ENGINE_COUNT - 1);
 		else if (!strncmp(key, "dip", 3)) read_dips(key, val); // (nbbatman-only era file: nbbatman's DIP)
 	}
 	fclose(f);
 	parse_end();
 	part_get(&s_global);
+	g_settings.input_engine = re_pad_engine_fit(g_settings.input_engine); // (as the Vita is: VitaControl when a list loads it)
 	REI_LOG("settings: fps %d aspect %d filter %d scan %d keys %d/%d/%d/%d last %s",
 		g_settings.show_fps, g_settings.aspect, g_settings.filter, g_settings.scan_type,
-		g_settings.keymap[0], g_settings.keymap[1], g_settings.keymap[2], g_settings.keymap[3], g_settings.last_game);
+		g_settings.port[0].keymap[0], g_settings.port[0].keymap[1], g_settings.port[0].keymap[2],
+		g_settings.port[0].keymap[3], g_settings.last_game);
 }
 
 static void game_path(char *buf, int len)
@@ -398,6 +473,7 @@ void rei_settings_save(void)
 	if (g_settings.show_list)
 		fprintf(f, "show_list=1\n");
 	fprintf(f, "list_filter=%d\ntheme=%d\n", g_settings.list_filter, g_settings.theme);
+	fprintf(f, "pad_p1=%d\npad_p2=%d\ninput_engine=%d\n", g_settings.pad_src[0], g_settings.pad_src[1], g_settings.input_engine);
 	fclose(f);
 	if (!s_game[0])
 		return;

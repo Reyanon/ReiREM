@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Build the app icon and LiveArea images from shapes and text (no game characters or logos — copyright, ADR-022).
+"""Build the app icon and LiveArea images from shapes and text (no game characters or logos - copyright, ADR-022).
 
 Output (sources):
 - vita/sce_sys_src/icon0.png (128x128), bg.png (840x500), startup.png (280x158)
   → python vita/tools/prepare_sce_sys.py writes them to vita/sce_sys/ in Vita format (8-bit palette)
 - psp/sce_sys/ICON0.PNG (144x80). no PSP background (PIC1)
 - art_psd/*.psd: same images split into layers (background, shadow, Rei, REM, underline, subtitle) for editing (only with psd-tools,
-  not committed — .gitignore)
+  not committed - .gitignore)
 Usage (Pillow, optional psd-tools): python tools/make_app_art.py
 """
 import os

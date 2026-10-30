@@ -33,7 +33,7 @@ typedef struct {
 	// Line ranges [y0, y1) filled by render (none if y0 >= y1): per A color group (color >> 8), A hidden flags, B, B color group bits
 	int16_t ay0[8], ay1[8], hy0, hy1, by0, by1;
 	int bbanks;
-	// Filled by the frontend in frame_begin: lines [clr_y0, clr_y1) to clear in A — sprite lines of the frame that last used this buffer
+	// Filled by the frontend in frame_begin: lines [clr_y0, clr_y1) to clear in A - sprite lines of the frame that last used this buffer
 	// (other lines are already 0). Render clears only those (it used to clear 150KB per frame)
 	int16_t clr_y0, clr_y1;
 } rei_m107_spr;

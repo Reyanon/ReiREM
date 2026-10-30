@@ -62,6 +62,7 @@ add_executable(${PROJECT_NAME}
   src/frontend/states.c
   src/frontend/ui.c
   src/frontend/touch.c
+  src/common/re_pad.c
   src/frontend/update.c
   src/frontend/testpad.c
   src/platform/clock.c
@@ -126,6 +127,21 @@ add_custom_command(OUTPUT "${REI_KSTUB}"
   DEPENDS "${CMAKE_BINARY_DIR}/kctrl.yml"
   VERBATIM)
 add_custom_target(kctrl_stubs DEPENDS "${REI_KSTUB}")
+
+# RePad: Bluetooth controllers (kernel plugin, MIT; vita/repad = the RePad project's files, keep them the same), in the
+# VPK as module/repad.skprx. The app loads it when it is not running yet (re_pad_load_plugin)
+add_executable(repad repad/src/main.c repad/src/bt.c repad/src/ctrl.c repad/src/pads.c)
+set_target_properties(repad PROPERTIES LINK_FLAGS "-nostdlib -fno-lto")
+# (taihen's TAI_CONTINUE: an empty () must mean any args; no LTO: module_start is named only by the module config)
+target_compile_options(repad PRIVATE -fno-builtin -std=gnu11 -fno-lto)
+target_link_libraries(repad SceBtForDriver_stub SceCtrlForDriver_stub SceKernelSuspendForDriver_stub SceSysclibForDriver_stub
+  SceThreadmgrForDriver_stub taihenForKernel_stub taihenModuleUtils_stub SceSblAIMgrForDriver_stub)
+add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/repad.skprx"
+  COMMAND vita-elf-create -e "${CMAKE_SOURCE_DIR}/repad/repad.yml" $<TARGET_FILE:repad> "${CMAKE_BINARY_DIR}/repad.velf"
+  COMMAND vita-make-fself -c "${CMAKE_BINARY_DIR}/repad.velf" "${CMAKE_BINARY_DIR}/repad.skprx"
+  DEPENDS repad "${CMAKE_SOURCE_DIR}/repad/repad.yml"
+  VERBATIM)
+add_custom_target(repad_skprx ALL DEPENDS "${CMAKE_BINARY_DIR}/repad.skprx")
 add_dependencies(${PROJECT_NAME} kctrl_stubs)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/kmod)
 
@@ -181,9 +197,10 @@ set(REI_SCE_SYS_FILES
 # module/rei_kctrl.skprx: the kernel helper; assets/blankArtwork.png: the border artwork of games without their own (shapes
 # and text only, tools/make_app_art.py); cacert.pem: certificates for the update check (HTTPS)
 set(REI_VPK_ADD_ARGS -a "${CMAKE_BINARY_DIR}/rei_kctrl.skprx=module/rei_kctrl.skprx"
+  -a "${CMAKE_BINARY_DIR}/repad.skprx=module/repad.skprx"
   -a "${CMAKE_SOURCE_DIR}/sce_sys_src/blankArtwork.png=assets/blankArtwork.png"
   -a "${CMAKE_SOURCE_DIR}/res/cacert.pem=cacert.pem")
-set(REI_VPK_DEPS "${CMAKE_BINARY_DIR}/rei_kctrl.skprx" "${CMAKE_SOURCE_DIR}/sce_sys_src/blankArtwork.png"
+set(REI_VPK_DEPS "${CMAKE_BINARY_DIR}/rei_kctrl.skprx" "${CMAKE_BINARY_DIR}/repad.skprx" "${CMAKE_SOURCE_DIR}/sce_sys_src/blankArtwork.png"
   "${CMAKE_SOURCE_DIR}/res/cacert.pem")
 foreach(f ${REI_SCE_SYS_FILES})
   list(APPEND REI_VPK_ADD_ARGS -a "${CMAKE_SOURCE_DIR}/${f}=${f}")

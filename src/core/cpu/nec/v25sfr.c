@@ -324,7 +324,7 @@ UINT8 v25_read_byte(v25_state_t *nec_state, unsigned a)
 			return nec_state->ram.b[BYTE_XOR_LE(o)];
 
 		if(o >= 0x100) {
-			rei_fx35++; // (ReiREM: SFR — timers etc.)
+			rei_fx35++; // (ReiREM: SFR - timers etc.)
 			return read_sfr(nec_state, o-0x100);
 		}
 	}

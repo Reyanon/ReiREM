@@ -4,7 +4,7 @@
 // and the per-iteration cycle cost d is the same twice in a row, treat the state as periodic and
 // consume k*d cycles at once. icount stays >= 1 after the skip, so icount > 0 held at every instruction boundary of the
 // skipped iterations, and the result (registers, cycles, interrupt timing) matches the original interpreter.
-// (originally left 2 iterations, more than needed. V35 with short slices spun 4 loops per line — measured on PSP)
+// (originally left 2 iterations, more than needed. V35 with short slices spun 4 loops per line - measured on PSP)
 // When an interrupt arrives the caller resets mark to 0 to restart measurement.
 //
 // Also measures iterations spanning slice boundaries (one VezRun) (PSP: re-measuring one loop per slice cost ~20% of V35 execution).

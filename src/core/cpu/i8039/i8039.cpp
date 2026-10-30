@@ -111,7 +111,7 @@ typedef struct
 	UINT8	irq_state, irq_extra_cycles;
 	INT32   inst_cycles;
 	UINT8	Old_T1;
-	INT64 total_cycles; // (ReiREM: was a double holding an integer sum — same value, same size. double is software on PSP / reset to 0 each frame)
+	INT64 total_cycles; // (ReiREM: was a double holding an integer sum - same value, same size. double is software on PSP / reset to 0 each frame)
 } I8039_Regs;
 
 typedef struct
@@ -1003,7 +1003,7 @@ int I8039Run(int cycles)
 		// (ReiREM) "JNT0 $" / "JNT1 $": waiting on a test input the driver says cannot change during a run and reads
 		// without side effect while it is 0 (rei_i8039_test_pure, M63 sound). Every further iteration is the same 2-cycle
 		// instruction, so skip them while the counter mode sees no edge and the timer does not overflow; the last iteration
-		// before the run ends (and an overflowing one) runs normally — the same cycles, timer and interrupt as without the skip
+		// before the run ends (and an overflowing one) runs normally - the same cycles, timer and interrupt as without the skip
 		else if (rei_i8039_test_pure && (opcode == 0x26 || opcode == 0x46) && R.PC.w.l == R.PREVPC.w.l && i8039_ICount > 2 && !end_run) {
 			const int c = opcode_main[opcode].cycles; // (taken: no ADJUST_CYCLES)
 			int n = (i8039_ICount - 1) / c;

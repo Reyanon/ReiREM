@@ -6,8 +6,12 @@
 
 // keys an area can press: REI_KEY_* (Cross .. Start), then the d-pad
 enum { REI_TKEY_UP = 8, REI_TKEY_DOWN, REI_TKEY_LEFT, REI_TKEY_RIGHT, REI_TKEY_COUNT };
+// a touch button can also press two keys together (its own, apart from Controls > Combo keys):
+// key = REI_TKEY_COMBO + bit mask (1 << REI_KEY_*) of the two (as in ReST-V)
+#define REI_TKEY_COMBO 256
+#define REI_TKEY_IS_COMBO(k) ((k) >= REI_TKEY_COMBO)
 
-typedef struct { int16_t x, y, w, h; int8_t key; } ReiTouchArea; // screen pixels (960x544)
+typedef struct { int16_t x, y, w, h, key; } ReiTouchArea; // screen pixels (960x544)
 
 void rei_touch_init(void);                 // start sampling, read the layout (ux0:data/reirem/touch.cfg)
 int rei_touch_count(void);

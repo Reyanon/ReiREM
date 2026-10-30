@@ -140,13 +140,13 @@ void GenericTilesSetGfx(INT32 nNum, UINT8 *GfxBase, INT32 nDepth, INT32 nTileWid
 // ----------------------------------------------------------------------------
 // Colour-depth independant image transfer
 
-// (ReiREM REI_RDR: the PSP ME render swaps pTransDraw in index mode, tilemap drawing uses pPrioDraw — keep them off main-variable cache lines)
+// (ReiREM REI_RDR: the PSP ME render swaps pTransDraw in index mode, tilemap drawing uses pPrioDraw - keep them off main-variable cache lines)
 REI_RDR UINT16* pTransDraw = NULL;
 REI_RDR UINT8 *pPrioDraw = NULL;
 
 static INT32 nTransWidth, nTransHeight;
 
-// (ReiREM PSP: zero-fill of large buffers — per 64-byte line, D-cache "Create Dirty Exclusive" (cache 0x18) allocates the line without
+// (ReiREM PSP: zero-fill of large buffers - per 64-byte line, D-cache "Create Dirty Exclusive" (cache 0x18) allocates the line without
 //  reading memory, then the whole line is written with 0. Full lines are written, so the result equals memset. Line fills dominated clearing 196KB not in cache)
 static void rei_zero(void *p, size_t n)
 {
@@ -173,7 +173,7 @@ void BurnTransferClear()
 	if (!Debug_BurnTransferInitted) bprintf(PRINT_ERROR, _T("BurnTransferClear called without init\n"));
 #endif
 
-	if (rei_render_noalloc) { // (PSP: render runs on the ME — no cache-line-create instructions on the ME)
+	if (rei_render_noalloc) { // (PSP: render runs on the ME - no cache-line-create instructions on the ME)
 		memset((void*)pTransDraw, 0, nTransWidth * nTransHeight * sizeof(UINT16));
 		memset(pPrioDraw, 0, nTransWidth * nTransHeight);
 		return;
@@ -204,7 +204,7 @@ void BurnTransferClear(UINT16 nFillPattern)
 	}
 }
 
-// (ReiREM PSP) If non-NULL, BurnTransferCopy leaves pixels alone and only copies the palette here as 16-bit — pTransDraw is the
+// (ReiREM PSP) If non-NULL, BurnTransferCopy leaves pixels alone and only copies the palette here as 16-bit - pTransDraw is the
 // index buffer the GE reads and colors via CLUT (rei_defer_render index mode, psp/src/video.c)
 UINT16 *rei_xfer_clut REI_RDR;
 INT32 rei_xfer_clut_n REI_RDR;
@@ -233,7 +233,7 @@ INT32 BurnTransferCopy(UINT32* pPalette)
 	switch (nBurnBpp) {
 		case 2: {
 #if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-			// (ReiREM: read/write two pixels at a time as 32-bit — half the memory accesses, same result. PSP other-board perf)
+			// (ReiREM: read/write two pixels at a time as 32-bit - half the memory accesses, same result. PSP other-board perf)
 			if ((nTransWidth & 3) == 0 && (nBurnPitch & 3) == 0 && ((uintptr_t)pDest & 3) == 0 && ((uintptr_t)pSrc & 3) == 0) {
 				for (INT32 y = 0; y < nTransHeight; y++, pSrc += nTransWidth, pDest += nBurnPitch) {
 					const UINT32 *s = (const UINT32 *)pSrc;
@@ -509,7 +509,7 @@ void GfxDecodeSingle(INT32 which, INT32 numPlanes, INT32 xSize, INT32 ySize, INT
 #define PLOTPIXEL_TRANSMASK(x) if (pTransTable[pTileData[x]] == 0) { pPixel[x] = nPalette + pTileData[x];}
 #define PLOTPIXEL_TRANSMASK_FLIPX(x, a) if (pTransTable[pTileData[a]] == 0) { pPixel[x] = nPalette + pTileData[a] ;}
 
-// (ReiREM: a tile outside the clip area writes nothing, so return early — same result. Off-screen cells used to be checked per pixel)
+// (ReiREM: a tile outside the clip area writes nothing, so return early - same result. Off-screen cells used to be checked per pixel)
 #define REI_CLIP_OUT(w, h) if (StartX >= nScreenWidthMax || StartX + (w) <= nScreenWidthMin || StartY >= nScreenHeightMax || StartY + (h) <= nScreenHeightMin) return
 #define CLIPPIXEL(x, sx, a) if ((sx + x) >= nScreenWidthMin && (sx + x) < nScreenWidthMax) { a; };
 
